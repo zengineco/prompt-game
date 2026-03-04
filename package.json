@@ -8,12 +8,19 @@
     "dev": "nodemon index.js",
     "deploy": "node deploy-commands.js"
   },
-  "keywords": ["discord", "game", "party", "bot", "cards-against-humanity", "ai"],
+  "keywords": [
+    "discord",
+    "game",
+    "party",
+    "bot",
+    "cards-against-humanity",
+    "ai"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "discord.js": "^14.14.1",
-    "dotenv": "^16.3.1"
+    "dotenv": "^16.6.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
