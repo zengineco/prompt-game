@@ -13,7 +13,24 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('prompt-start')
-    .setDescription('🚀 Start the game (need 3–9 players)'),
+    .setDescription('🚀 Start the game (need 3–9 players)')
+    .addStringOption(option =>
+      option
+        .setName('category')
+        .setDescription('Which response deck to play (default: mixed)')
+        .setRequired(false)
+        .addChoices(
+          { name: 'Mixed (all decks)', value: 'all' },
+          { name: 'Legal', value: 'legal' },
+          { name: 'HR', value: 'hr' },
+          { name: 'Incident', value: 'incident' },
+          { name: 'Existential', value: 'existential' },
+          { name: 'AI Panic', value: 'aipanic' },
+          { name: 'Doom', value: 'doom' },
+          { name: 'Unhinged', value: 'unhinged' },
+          { name: 'Relatable', value: 'relatable' }
+        )
+    ),
 
   new SlashCommandBuilder()
     .setName('prompt-end')
