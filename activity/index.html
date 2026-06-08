@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <!--
 ============================================================
-PROMPT (Reverse Mode) — Discord Activity (Vite entry) v0.2.0
-Live multiplayer green-terminal Embedded App.
+PROMPT (Reverse Mode) — Discord Activity (Vite entry) v0.3.0
+Live multiplayer green-terminal Embedded App, now in a 90s CRT monitor.
 Zengine™ | www.zengine.site
 ============================================================
 NOTE: No AdSense (Discord sandbox/ToS). Fonts bundled via @fontsource.
-      All logic in src/main.js; styles in src/style.css.
-      #game is rendered per-phase by main.js from live Supabase state.
+      Logic in src/main.js; styles in src/style.css.
+      Bezel/glass/chin = the CRT shell; #game is rendered per-phase by main.js.
 ============================================================
 -->
 <html lang="en">
@@ -17,21 +17,31 @@ NOTE: No AdSense (Discord sandbox/ToS). Fonts bundled via @fontsource.
   <title>PROMPT // REVERSE MODE</title>
 </head>
 <body>
-  <main class="screen">
-    <div class="topbar">
-      <span class="title">PROMPT // REVERSE MODE</span>
-      <span class="zg-monogram">ZG</span>
+  <!-- CRT monitor shell -->
+  <div class="crt-frame">
+    <div class="crt-screen">
+      <div class="fx-flash" id="fx-flash"></div><!-- channel-change transition flash -->
+      <main class="screen">
+        <div class="topbar">
+          <span class="title">PROMPT // REVERSE MODE</span>
+          <span class="zg-monogram">ZG</span>
+        </div>
+
+        <pre class="boot" id="boot"></pre>
+        <div class="link-status" id="link-status"></div>
+
+        <div id="game"><!-- rendered per-phase by main.js --></div>
+
+        <div class="scoreboard" id="scoreboard"></div>
+
+        <footer>www.zengine.site | © 2026 Zengine™</footer>
+      </main>
     </div>
-
-    <pre class="boot" id="boot"></pre>
-    <div class="link-status" id="link-status"></div>
-
-    <div id="game"><!-- rendered per-phase by main.js --></div>
-
-    <div class="scoreboard" id="scoreboard"></div>
-
-    <footer>www.zengine.site | © 2026 Zengine™</footer>
-  </main>
+    <div class="crt-chin">
+      <span class="crt-brand">ZENGINE ZG-9000</span>
+      <span class="crt-power" title="power"></span>
+    </div>
+  </div>
 
   <script type="module" src="/src/main.js"></script>
 </body>

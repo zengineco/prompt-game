@@ -68,7 +68,8 @@ var STATE = {
   advanceTimer: null,
   leaderboard: [],      // top profiles all-time
   profilesById: {},     // discord_id -> profile (for session players' titles)
-  myProfile: null       // this player's profile
+  myProfile: null,      // this player's profile
+  lastPhase: null       // for phase-transition FX
 };
 
 // ── Small helpers ──────────────────────────────────────────────────────────
@@ -103,6 +104,16 @@ function typeText(node, text, speed, done) {
 }
 
 function setStatus(msg) { var s = el('link-status'); if (s) s.textContent = msg; }
+
+// ── FX — reusable visual hooks. Add new screen effects here (glitch, shake, etc.)
+// fxFlash() = CRT channel-change flash; called on every phase transition.
+function fxFlash() {
+  var f = el('fx-flash');
+  if (!f) return;
+  f.classList.remove('fx-active');
+  void f.offsetWidth;        // force reflow so the animation can re-trigger
+  f.classList.add('fx-active');
+}
 
 // ── Boot sequence ──────────────────────────────────────────────────────────
 function boot() {
@@ -243,6 +254,7 @@ function mine(list, idField) {
 function render() {
   if (!STATE.session) { el('game').innerHTML = '<div class="muted">connecting...</div>'; return; }
   var phase = STATE.session.phase;
+  if (phase !== STATE.lastPhase) { fxFlash(); STATE.lastPhase = phase; }   // CRT channel-change on transitions
   if (phase === 'lobby') renderLobby();
   else if (phase === 'responding') renderResponding();
   else if (phase === 'voting') renderVoting();
