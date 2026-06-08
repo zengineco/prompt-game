@@ -1,0 +1,34 @@
+# ============================================================
+# PROMPT — Daily card generation (NEW CUES DAILY)
+# Fires prompt-generate once a day on a rotating category → pending queue.
+# Cards land as source='ai', approved=false (Claude/Vince curates before they go live).
+# Zengine™ | www.zengine.site
+# ============================================================
+name: Daily Cards
+
+on:
+  schedule:
+    - cron: '0 9 * * *'   # 09:00 UTC daily
+  workflow_dispatch:       # also lets you click "Run workflow" manually anytime
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Generate a fresh batch (rotating category)
+        env:
+          FN_URL: https://ihclxurachkewtgnrldc.supabase.co/functions/v1/prompt-generate
+          ANON: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          ADMIN_TOKEN: ${{ secrets.PROMPT_ADMIN_TOKEN }}
+        run: |
+          CATS=(legal hr incident existential aipanic doom unhinged relatable)
+          IDX=$(( $(date +%j) % 8 ))      # rotate category by day-of-year
+          CAT=${CATS[$IDX]}
+          echo "Generating 24 '$CAT' cards..."
+          curl -sS -X POST "$FN_URL" \
+            -H "Authorization: Bearer $ANON" \
+            -H "Content-Type: application/json" \
+            -d "{\"admin_token\":\"$ADMIN_TOKEN\",\"category\":\"$CAT\",\"count\":24}" \
+            | tee /tmp/out.json
+          echo
+          grep -q '"ok":true' /tmp/out.json || { echo "::error::generation failed"; exit 1; }
