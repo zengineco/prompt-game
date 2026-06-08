@@ -249,6 +249,28 @@ button.ghost:hover { background: rgba(31, 156, 67, 0.12); }
 .scoreboard .label { width: 100%; }
 .score-chip { font-size: 15px; letter-spacing: 1px; }
 
+/* ── v2.2 Progression: titles, rank, leaderboard ─────────────────────────── */
+.title-tag {
+  font-size: 12px;
+  letter-spacing: 1px;
+  border: 1px solid var(--phosphor-dim);
+  padding: 1px 6px;
+  color: var(--phosphor);
+  white-space: nowrap;
+}
+.my-rank {
+  width: 100%;
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--phosphor-dim);
+  letter-spacing: 1px;
+}
+.my-rank b { color: var(--phosphor); }
+
+.leaderboard { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.lb-row { font-size: 15px; letter-spacing: 1px; }
+.lb-row .who { color: var(--phosphor); }
+
 /* Accessibility: respect reduced-motion (WCAG) — kill flicker/scanline animation */
 @media (prefers-reduced-motion: reduce) {
   body::after { animation: none; }

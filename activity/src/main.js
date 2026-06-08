@@ -65,7 +65,10 @@ var STATE = {
   votes: [],
   lastTyped: null,     // last current_response we animated
   category: 'all',
-  advanceTimer: null
+  advanceTimer: null,
+  leaderboard: [],      // top profiles all-time
+  profilesById: {},     // discord_id -> profile (for session players' titles)
+  myProfile: null       // this player's profile
 };
 
 // ── Small helpers ──────────────────────────────────────────────────────────
@@ -201,6 +204,8 @@ function subscribe() {
     var filter = (t === 'prompt_sessions' ? 'id=eq.' : 'session_id=eq.') + STATE.sessionId;
     ch.on('postgres_changes', { event: '*', schema: 'public', table: t, filter: filter }, function () { refresh(); });
   });
+  // global: profile/title/leaderboard changes (not session-scoped)
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_profiles' }, function () { refresh(); });
   ch.subscribe();
 }
 
@@ -216,6 +221,16 @@ async function refresh() {
     STATE.submissions = subs.data || [];
     var votes = await sb.from('prompt_votes').select('*').eq('session_id', STATE.sessionId).eq('round', round);
     STATE.votes = votes.data || [];
+    // v2.2 — titles/streaks for session players + all-time leaderboard
+    var ids = STATE.players.map(function (x) { return x.id; });
+    STATE.profilesById = {};
+    if (ids.length) {
+      var pr = await sb.from('prompt_profiles').select('*').in('discord_id', ids);
+      (pr.data || []).forEach(function (pf) { STATE.profilesById[pf.discord_id] = pf; });
+    }
+    STATE.myProfile = STATE.profilesById[STATE.user.id] || null;
+    var lb = await sb.from('prompt_profiles').select('username,rounds_won,best_streak,title').order('rounds_won', { ascending: false }).limit(8);
+    STATE.leaderboard = lb.data || [];
     render();
   } catch (err) { console.error('refresh:', err); }
 }
@@ -248,7 +263,8 @@ function renderLobby() {
     '<div class="prompt-line"><span class="arrow">&gt;</span> DECK:</div>' +
     '<div class="input-row"><select id="cat-select">' + opts + '</select>' +
     '<button id="start-btn"' + (canStart ? '' : ' disabled') + '>START</button></div>' +
-    (canStart ? '' : '<div class="muted">need 2+ players to start</div>');
+    (canStart ? '' : '<div class="muted">need 2+ players to start</div>') +
+    leaderboardHtml();
   el('cat-select').addEventListener('change', function (e) { STATE.category = e.target.value; });
   el('start-btn').addEventListener('click', function () { callFn('start', { category: STATE.category }); });
 }
@@ -356,9 +372,28 @@ function renderScoreboard() {
   var board = sorted.map(function (p, i) {
     var m = medals[i] || (i + 1) + '.';
     var me = p.id === STATE.user.id ? ' (you)' : '';
-    return '<span class="score-chip">' + m + ' ' + escapeHtml(p.username) + me + ' — ' + p.score + '</span>';
+    var prof = STATE.profilesById[p.id];
+    var title = (prof && prof.title) ? ' <span class="title-tag">' + escapeHtml(prof.title) + '</span>' : '';
+    return '<span class="score-chip">' + m + ' ' + escapeHtml(p.username) + me + title + ' — ' + p.score + '</span>';
   }).join('');
-  el('scoreboard').innerHTML = board ? '<div class="label">SCOREBOARD</div>' + board : '';
+  var mine = '';
+  if (STATE.myProfile) {
+    mine = '<div class="my-rank">RANK: <b>' + escapeHtml(STATE.myProfile.title || 'UNRANKED') + '</b>' +
+      ' · ' + STATE.myProfile.rounds_won + ' lifetime wins · streak ' + STATE.myProfile.current_streak +
+      ' (best ' + STATE.myProfile.best_streak + ')</div>';
+  }
+  el('scoreboard').innerHTML = (board ? '<div class="label">SCOREBOARD</div>' + board : '') + mine;
+}
+
+// All-time cross-game leaderboard (shown in the lobby — the "reason to return")
+function leaderboardHtml() {
+  if (!STATE.leaderboard || !STATE.leaderboard.length) return '';
+  var rows = STATE.leaderboard.map(function (p, i) {
+    var medal = ['🥇', '🥈', '🥉'][i] || (i + 1) + '.';
+    return '<div class="lb-row">' + medal + ' <span class="who">' + escapeHtml(p.username) + '</span> ' +
+      '<span class="title-tag">' + escapeHtml(p.title || 'UNRANKED') + '</span> · ' + p.rounds_won + 'w</div>';
+  }).join('');
+  return '<div class="panel"><div class="label">🏆 Hall of Fame — all-time</div><div class="leaderboard">' + rows + '</div></div>';
 }
 
 // paint the transmission, animating only when the response text changes
