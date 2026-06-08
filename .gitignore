@@ -6,6 +6,9 @@
 # Dependencies
 node_modules/
 
+# Build output (CI rebuilds this)
+dist/
+
 # Logs
 npm-debug.log*
 *.log

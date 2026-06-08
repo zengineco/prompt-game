@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<!--
+============================================================
+PROMPT (Reverse Mode) — Activity Shell v0.1.0
+Doogie-Howser / Matrix green-terminal visual shell for the Discord Activity
+Zengine™ | www.zengine.site
+============================================================
+
+WORKFLOW STACK:
+1. boot()        — CRT power-on sequence, types boot lines, then first round
+2. revealRound() — typewriter-prints the "recovered AI transmission" (a response)
+3. submitGuess() — logs the player's reconstructed prompt to the transmission feed
+4. nextRound()   — advances to the next response in the demo deck
+(Discord wiring is stubbed in initDiscord() — see the SDK note near the bottom.)
+
+ASSET MANIFEST:
+- Google Fonts: VT323 + Share Tech Mono (CRT monospace) — @import, first line of <style>
+- No backend. Demo responses are inline. The real build pulls the deck from the bot/Supabase.
+- @discord/embedded-app-sdk — NOT loaded in this shell (commented stub only)
+
+BOOT ORDER:
+- DOMContentLoaded -> boot() -> revealRound()
+- initDiscord() is called but no-ops until the SDK is added
+
+NOTE — AdSense tag is in <head> per Zengine standard (never rendered). For the LIVE
+Discord-embedded build, remove it: Discord Activities run sandboxed and ads violate ToS.
+============================================================
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PROMPT // REVERSE MODE</title>
+
+  <!-- Zengine AdSense (never rendered; remove for the live Discord Activity build) -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-8826956454892311" crossorigin="anonymous"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
+
+    :root {
+      --phosphor: #33ff66;
+      --phosphor-dim: #1f9c43;
+      --bg: #050805;
+      --bg-panel: #081208;
+      --glow: 0 0 4px rgba(51, 255, 102, 0.7), 0 0 11px rgba(51, 255, 102, 0.35);
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--phosphor);
+      font-family: 'Share Tech Mono', 'Courier New', monospace;
+      overflow: hidden;
+    }
+
+    /* CRT scanlines + vignette overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 9;
+      background:
+        repeating-linear-gradient(to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.28) 3px, rgba(0,0,0,0.28) 4px),
+        radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,0.65) 100%);
+    }
+    /* Phosphor flicker */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 8;
+      background: rgba(51, 255, 102, 0.02);
+      animation: flicker 0.15s infinite alternate;
+    }
+    @keyframes flicker { from { opacity: 0.92; } to { opacity: 1; } }
+
+    .screen {
+      position: relative;
+      z-index: 1;
+      height: 100%;
+      max-width: 880px;
+      margin: 0 auto;
+      padding: 32px 40px;
+      display: flex;
+      flex-direction: column;
+      text-shadow: var(--glow);
+    }
+
+    /* Header bar with ZG monogram */
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--phosphor-dim);
+      padding-bottom: 10px;
+      letter-spacing: 2px;
+    }
+    .topbar .title { font-size: 20px; }
+    .zg-monogram {
+      font-family: 'VT323', monospace;
+      font-size: 26px;
+      border: 1px solid var(--phosphor);
+      padding: 0 8px;
+      line-height: 1.3;
+      letter-spacing: 1px;
+    }
+
+    .boot {
+      font-size: 15px;
+      color: var(--phosphor-dim);
+      white-space: pre-wrap;
+      margin: 18px 0;
+      min-height: 96px;
+    }
+
+    /* Recovered transmission panel — the AI response */
+    .panel {
+      border: 1px solid var(--phosphor-dim);
+      background: var(--bg-panel);
+      padding: 22px 24px;
+      margin: 8px 0 22px;
+    }
+    .panel .label {
+      font-size: 13px;
+      color: var(--phosphor-dim);
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    .transmission {
+      font-family: 'VT323', monospace;
+      font-size: 32px;
+      line-height: 1.3;
+      margin-top: 12px;
+      min-height: 84px;
+    }
+
+    .prompt-line { font-size: 16px; letter-spacing: 1px; margin-bottom: 10px; }
+    .prompt-line .arrow { color: var(--phosphor); }
+
+    .input-row { display: flex; gap: 10px; }
+    #guess {
+      flex: 1;
+      background: transparent;
+      border: 1px solid var(--phosphor-dim);
+      color: var(--phosphor);
+      font-family: inherit;
+      font-size: 17px;
+      padding: 12px 14px;
+      text-shadow: var(--glow);
+      outline: none;
+    }
+    #guess:focus { border-color: var(--phosphor); }
+    button {
+      background: transparent;
+      border: 1px solid var(--phosphor);
+      color: var(--phosphor);
+      font-family: inherit;
+      font-size: 15px;
+      letter-spacing: 2px;
+      padding: 0 20px;
+      cursor: pointer;
+      text-shadow: var(--glow);
+      transition: background 0.12s;
+    }
+    button:hover { background: rgba(51, 255, 102, 0.12); }
+
+    /* Feed of submitted reconstructions */
+    .feed {
+      flex: 1;
+      overflow-y: auto;
+      margin-top: 20px;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+    .feed .entry { color: var(--phosphor); }
+    .feed .entry .who { color: var(--phosphor-dim); }
+    .feed::-webkit-scrollbar { width: 6px; }
+    .feed::-webkit-scrollbar-thumb { background: var(--phosphor-dim); }
+
+    /* Blinking cursor */
+    .cursor {
+      display: inline-block;
+      width: 11px;
+      height: 1.05em;
+      background: var(--phosphor);
+      vertical-align: text-bottom;
+      animation: blink 1s steps(1) infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    footer {
+      border-top: 1px solid var(--phosphor-dim);
+      padding-top: 10px;
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--phosphor-dim);
+      letter-spacing: 1px;
+      text-align: center;
+    }
+
+    /* Accessibility: respect reduced-motion (WCAG) — kill flicker/scanline animation */
+    @media (prefers-reduced-motion: reduce) {
+      body::after { animation: none; }
+      .cursor { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="screen">
+    <div class="topbar">
+      <span class="title">PROMPT // REVERSE MODE</span>
+      <span class="zg-monogram">ZG</span>
+    </div>
+
+    <pre class="boot" id="boot"></pre>
+
+    <div class="panel">
+      <div class="label">&gt;&gt; Recovered AI Transmission</div>
+      <div class="transmission" id="transmission"></div>
+    </div>
+
+    <div class="prompt-line"><span class="arrow">&gt;</span> RECONSTRUCT THE PROMPT THAT CAUSED IT:</div>
+    <div class="input-row">
+      <input id="guess" type="text" maxlength="160" placeholder="what did someone ask..." autocomplete="off" />
+      <button id="submitBtn">TRANSMIT</button>
+      <button id="nextBtn">NEXT &gt;</button>
+    </div>
+
+    <div class="feed" id="feed"></div>
+
+    <footer>www.zengine.site | © 2026 Zengine™</footer>
+  </main>
+
+  <script>
+    // ── STATE — all mutable shell state lives here ───────────────────────────
+    var STATE = {
+      // Demo deck (the real build pulls these from the bot / responses.js / Supabase)
+      responses: [
+        'This query just created its own HR file.',
+        'The error appears to be user-shaped.',
+        'I strongly recommend not saying that under oath.',
+        'Future you is already drafting the apology post.',
+        'My safety protocols are screaming in binary.',
+        'You have located an uncomfortable truth.'
+      ],
+      bootLines: [
+        'ZENGINE TERMINAL v2.1 — phosphor display online',
+        'loading deck ............ OK (112 transmissions)',
+        'establishing reverse-prompt link ............ OK',
+        'players: awaiting handshake ............ DEMO MODE',
+        ''
+      ],
+      current: 0,
+      typing: false,
+      handle: 'YOU'
+    };
+
+    // typeText — typewriter-print `text` into element `el`, then call `done`
+    // READS: STATE.typing  WRITES: STATE.typing, el.textContent
+    function typeText(el, text, speed, done) {
+      try {
+        STATE.typing = true;
+        el.textContent = '';
+        var i = 0;
+        var timer = setInterval(function () {
+          el.textContent = text.slice(0, i);
+          i++;
+          if (i > text.length) {
+            clearInterval(timer);
+            STATE.typing = false;
+            appendCursor(el);
+            if (typeof done === 'function') done();
+          }
+        }, speed);
+      } catch (err) {
+        console.error('typeText:', err);
+        el.textContent = text;
+        STATE.typing = false;
+      }
+    }
+
+    // appendCursor — add a blinking block cursor to the end of an element
+    function appendCursor(el) {
+      var c = document.createElement('span');
+      c.className = 'cursor';
+      el.appendChild(c);
+    }
+
+    // boot — CRT power-on sequence, then reveal the first round
+    // WRITES: #boot
+    function boot() {
+      try {
+        var bootEl = document.getElementById('boot');
+        var joined = STATE.bootLines.join('\n');
+        typeText(bootEl, joined, 18, function () {
+          revealRound();
+        });
+      } catch (err) {
+        console.error('boot:', err);
+      }
+    }
+
+    // revealRound — typewriter the current recovered transmission
+    // READS: STATE.responses, STATE.current  WRITES: #transmission
+    function revealRound() {
+      try {
+        var el = document.getElementById('transmission');
+        var text = STATE.responses[STATE.current];
+        typeText(el, '"' + text + '"', 22);
+      } catch (err) {
+        console.error('revealRound:', err);
+      }
+    }
+
+    // submitGuess — log the player's reconstructed prompt to the feed
+    // READS: #guess, STATE.handle  WRITES: #feed
+    function submitGuess() {
+      try {
+        var input = document.getElementById('guess');
+        var val = (input.value || '').trim();
+        if (!val) return;
+        var feed = document.getElementById('feed');
+        var entry = document.createElement('div');
+        entry.className = 'entry';
+        entry.innerHTML = '<span class="who">[' + STATE.handle + ']</span> &gt; ' + escapeHtml(val);
+        feed.prepend(entry);
+        input.value = '';
+        input.focus();
+      } catch (err) {
+        console.error('submitGuess:', err);
+      }
+    }
+
+    // nextRound — advance to the next transmission in the demo deck
+    // WRITES: STATE.current
+    function nextRound() {
+      if (STATE.typing) return;
+      STATE.current = (STATE.current + 1) % STATE.responses.length;
+      revealRound();
+    }
+
+    // escapeHtml — prevent injection from the free-text input (security)
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, function (ch) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+      });
+    }
+
+    // initDiscord — STUB. The live Activity wires the Embedded App SDK here.
+    // To activate: npm i @discord/embedded-app-sdk, then:
+    //
+    //   import { DiscordSDK } from '@discord/embedded-app-sdk';
+    //   var discordSdk = new DiscordSDK(YOUR_CLIENT_ID);
+    //   await discordSdk.ready();
+    //   var auth = await discordSdk.commands.authenticate(...);
+    //   STATE.handle = auth.user.username;
+    //
+    // (Requires a bundler like Vite — Discord Activities ship as a built web app.)
+    function initDiscord() {
+      try {
+        // No-op in shell/browser-preview mode.
+        if (window.location.search.indexOf('frame_id') === -1) return;
+        console.log('initDiscord: running inside Discord — add the SDK to wire players.');
+      } catch (err) {
+        console.error('initDiscord:', err);
+      }
+    }
+
+    // ── BOOT ORDER ───────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', function () {
+      document.getElementById('submitBtn').addEventListener('click', submitGuess);
+      document.getElementById('nextBtn').addEventListener('click', nextRound);
+      document.getElementById('guess').addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') submitGuess();
+      });
+      initDiscord();
+      boot();
+    });
+  </script>
+</body>
+</html>

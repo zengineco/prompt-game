@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<!--
+============================================================
+PROMPT (Reverse Mode) — Discord Activity (Vite entry) v0.1.0
+Green-terminal Embedded App. Loaded inside Discord's sandboxed iframe.
+Zengine™ | www.zengine.site
+============================================================
+NOTE: No AdSense here — Discord Activities run sandboxed and ads violate ToS.
+      Fonts are bundled via @fontsource (CDN fonts are blocked by Discord's CSP).
+      All boot/game/SDK logic lives in src/main.js; styles in src/style.css.
+============================================================
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PROMPT // REVERSE MODE</title>
+</head>
+<body>
+  <main class="screen">
+    <div class="topbar">
+      <span class="title">PROMPT // REVERSE MODE</span>
+      <span class="zg-monogram">ZG</span>
+    </div>
+
+    <pre class="boot" id="boot"></pre>
+    <div class="link-status" id="link-status"></div>
+
+    <div class="panel">
+      <div class="label">&gt;&gt; Recovered AI Transmission</div>
+      <div class="transmission" id="transmission"></div>
+    </div>
+
+    <div class="prompt-line"><span class="arrow">&gt;</span> RECONSTRUCT THE PROMPT THAT CAUSED IT:</div>
+    <div class="input-row">
+      <input id="guess" type="text" maxlength="160" placeholder="what did someone ask..." autocomplete="off" />
+      <button id="submitBtn">TRANSMIT</button>
+      <button id="nextBtn">NEXT &gt;</button>
+    </div>
+
+    <div class="feed" id="feed"></div>
+
+    <footer>www.zengine.site | © 2026 Zengine™</footer>
+  </main>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
