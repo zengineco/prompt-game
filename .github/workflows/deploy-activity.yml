@@ -39,8 +39,10 @@ jobs:
         working-directory: activity
         run: npm run build
         env:
-          # App ID is public (not a secret); baked in at build time for the SDK handshake
+          # All public (App ID + Supabase anon key, protected by RLS); baked in at build time
           VITE_DISCORD_CLIENT_ID: ${{ vars.VITE_DISCORD_CLIENT_ID }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
       - uses: actions/configure-pages@v5
         with:
           enablement: true
