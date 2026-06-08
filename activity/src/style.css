@@ -176,6 +176,79 @@ footer {
   text-align: center;
 }
 
+/* ── Multiplayer game UI ─────────────────────────────────────────────────── */
+.muted { color: var(--phosphor-dim); font-size: 14px; letter-spacing: 1px; }
+
+.transmission-small {
+  font-family: 'VT323', monospace;
+  font-size: 22px;
+  line-height: 1.3;
+  margin-top: 8px;
+}
+
+.roster { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0; }
+.chip { font-size: 15px; letter-spacing: 1px; }
+
+select {
+  background: var(--bg-panel);
+  border: 1px solid var(--phosphor-dim);
+  color: var(--phosphor);
+  font-family: inherit;
+  font-size: 16px;
+  padding: 11px 14px;
+  text-shadow: var(--glow);
+  outline: none;
+}
+select:focus { border-color: var(--phosphor); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.row-actions { margin-top: 14px; }
+button.ghost {
+  border-color: var(--phosphor-dim);
+  color: var(--phosphor-dim);
+  font-size: 13px;
+  padding: 6px 14px;
+  letter-spacing: 1px;
+}
+button.ghost:hover { background: rgba(31, 156, 67, 0.12); }
+
+/* Voting cards */
+.subs { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.sub-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--phosphor-dim);
+  background: var(--bg-panel);
+  padding: 12px 14px;
+}
+.vote-btn { padding: 0 16px; height: 38px; }
+.sub-text { font-size: 16px; line-height: 1.4; }
+
+/* Results */
+.results { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+.result-row {
+  border-left: 2px solid var(--phosphor-dim);
+  padding: 6px 0 6px 12px;
+  font-size: 15px;
+}
+.result-row.win { border-left-color: var(--phosphor); }
+.result-row.win .who { font-weight: bold; }
+.result-row .who { color: var(--phosphor); letter-spacing: 1px; }
+
+/* Scoreboard */
+.scoreboard {
+  border-top: 1px solid var(--phosphor-dim);
+  margin-top: 16px;
+  padding-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: center;
+}
+.scoreboard .label { width: 100%; }
+.score-chip { font-size: 15px; letter-spacing: 1px; }
+
 /* Accessibility: respect reduced-motion (WCAG) — kill flicker/scanline animation */
 @media (prefers-reduced-motion: reduce) {
   body::after { animation: none; }
