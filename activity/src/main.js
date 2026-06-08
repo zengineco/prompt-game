@@ -116,15 +116,15 @@ function boot() {
 
 // ── Edge Function caller (the referee) ─────────────────────────────────────
 async function callFn(action, payload) {
-  try {
-    var body = Object.assign({ action: action, instance_id: STATE.instanceId }, payload || {});
-    var res = await STATE.supabase.functions.invoke('prompt-game', { body: body });
-    if (res.error) { console.error('callFn ' + action + ':', res.error); return null; }
-    return res.data;
-  } catch (err) {
-    console.error('callFn ' + action + ':', err);
-    return null;
+  var body = Object.assign({ action: action, instance_id: STATE.instanceId }, payload || {});
+  var res = await STATE.supabase.functions.invoke('prompt-game', { body: body });
+  if (res.error) {
+    var detail = res.error.message || JSON.stringify(res.error);
+    console.error('callFn ' + action + ':', res.error);
+    throw new Error('fn[' + action + ']: ' + detail);
   }
+  if (res.data && res.data.error) throw new Error('fn[' + action + ']: ' + res.data.error);
+  return res.data;
 }
 
 // ── Init: Discord OAuth path, or browser guest path ────────────────────────
@@ -151,39 +151,32 @@ async function init() {
 }
 
 async function initDiscord() {
-  try {
-    setStatus('players: linking to Discord...');
-    STATE.sdk = new DiscordSDK(CLIENT_ID);
-    await STATE.sdk.ready();
-    STATE.instanceId = STATE.sdk.instanceId;
-    // Route Supabase through Discord's proxy (needs matching portal Proxy Path Mapping)
-    patchUrlMappings([{ prefix: '/supabase', target: SUPABASE_HOST }]);
-  } catch (err) {
-    console.error('initDiscord:', err);
-    setStatus('players: LINK FAILED — see console');
-  }
+  setStatus('players: linking to Discord...');
+  STATE.sdk = new DiscordSDK(CLIENT_ID);
+  await STATE.sdk.ready();
+  STATE.instanceId = STATE.sdk.instanceId;
+  // Route Supabase through Discord's proxy (needs matching portal Proxy Path Mapping)
+  patchUrlMappings([{ prefix: '/supabase', target: SUPABASE_HOST }]);
 }
 
-// Exchange the OAuth code (via Edge Function) and resolve the real username
+// Exchange the OAuth code (via Edge Function) and resolve the real username.
+// Errors propagate to init() so they show on screen.
 async function authenticateDiscord() {
-  try {
-    var auth = await STATE.sdk.commands.authorize({
-      client_id: CLIENT_ID,
-      response_type: 'code',
-      state: '',
-      prompt: 'none',
-      scope: ['identify']
-    });
-    var tok = await callFn('token', { code: auth.code });
-    if (!tok || !tok.access_token) { setStatus('players: AUTH FAILED'); return; }
-    var result = await STATE.sdk.commands.authenticate({ access_token: tok.access_token });
-    var u = result.user || {};
-    STATE.user = { id: u.id, username: u.global_name || u.username || 'Player' };
-    setStatus('players: LINK ESTABLISHED — ' + STATE.user.username);
-  } catch (err) {
-    console.error('authenticateDiscord:', err);
-    setStatus('players: AUTH ERROR — see console');
-  }
+  setStatus('players: authorizing...');
+  var auth = await STATE.sdk.commands.authorize({
+    client_id: CLIENT_ID,
+    response_type: 'code',
+    state: '',
+    prompt: 'none',
+    scope: ['identify']
+  });
+  setStatus('players: exchanging token...');
+  var tok = await callFn('token', { code: auth.code });
+  if (!tok || !tok.access_token) throw new Error('token exchange returned no access_token');
+  var result = await STATE.sdk.commands.authenticate({ access_token: tok.access_token });
+  var u = result.user || {};
+  STATE.user = { id: u.id, username: u.global_name || u.username || 'Player' };
+  setStatus('players: LINK ESTABLISHED — ' + STATE.user.username);
 }
 
 // Browser guest mode — each tab is a player; ?room= groups them
@@ -384,5 +377,12 @@ function paintTransmission() {
 // ── BOOT ORDER ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function () {
   boot();
-  init().catch(function (err) { console.error('init:', err); setStatus('players: INIT FAILED — see console'); });
+  init().catch(function (err) {
+    console.error('init:', err);
+    var msg = (err && err.message) ? err.message : String(err);
+    setStatus('players: INIT FAILED');
+    var g = el('game');
+    if (g) g.innerHTML = '<div class="panel"><div class="label">&gt;&gt; INIT ERROR</div>' +
+      '<div class="sub-text">' + escapeHtml(msg) + '</div></div>';
+  });
 });
