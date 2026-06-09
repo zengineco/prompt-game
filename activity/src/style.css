@@ -343,6 +343,38 @@ button.ghost:hover { background: rgba(31, 156, 67, 0.12); }
 .lb-row { font-size: 15px; letter-spacing: 1px; }
 .lb-row .who { color: var(--phosphor); }
 
+/* ── Award system UI ─────────────────────────────────────────────────────── */
+.award-pickers { font-size: 14px; letter-spacing: 1px; margin: 6px 0 12px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.sub-card2 {
+  border: 1px solid var(--phosphor-dim);
+  background: var(--bg-panel);
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.sub-actions { display: flex; gap: 8px; margin-top: 8px; align-items: center; }
+.crown-btn, .read-btn { font-size: 13px; padding: 5px 12px; letter-spacing: 1px; }
+.my-tag {
+  display: inline-block;
+  margin: 6px 8px 0 0;
+  font-size: 12px;
+  color: var(--phosphor);
+  border: 1px solid var(--phosphor-dim);
+  padding: 1px 7px;
+}
+.award-row { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.award-chip {
+  font-size: 12px;
+  letter-spacing: 1px;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.rarity-common    { color: var(--phosphor-dim); }
+.rarity-uncommon  { color: var(--phosphor); }
+.rarity-rare      { color: #33ccff; text-shadow: 0 0 5px rgba(51,204,255,0.5); }
+.rarity-epic      { color: #c061ff; text-shadow: 0 0 5px rgba(192,97,255,0.5); }
+.rarity-legendary { color: #ffcf4d; text-shadow: 0 0 6px rgba(255,207,77,0.6); }
+
 /* Accessibility: respect reduced-motion (WCAG) — kill flicker/scanline animation */
 @media (prefers-reduced-motion: reduce) {
   .crt-screen::after { animation: none; }

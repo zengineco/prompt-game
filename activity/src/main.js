@@ -69,7 +69,11 @@ var STATE = {
   leaderboard: [],      // top profiles all-time
   profilesById: {},     // discord_id -> profile (for session players' titles)
   myProfile: null,      // this player's profile
-  lastPhase: null       // for phase-transition FX
+  lastPhase: null,      // for phase-transition FX
+  awardDefs: [],        // the award deck (registry)
+  awardsByKey: {},      // key -> award def
+  roundGrants: [],      // awards granted this round (for the results screen)
+  myTags: []            // my crown/read this round
 };
 
 // ── Small helpers ──────────────────────────────────────────────────────────
@@ -215,7 +219,10 @@ function subscribe() {
     var filter = (t === 'prompt_sessions' ? 'id=eq.' : 'session_id=eq.') + STATE.sessionId;
     ch.on('postgres_changes', { event: '*', schema: 'public', table: t, filter: filter }, function () { refresh(); });
   });
-  // global: profile/title/leaderboard changes (not session-scoped)
+  // award-system tables (session-scoped)
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_tag_votes', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_award_grants', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
+  // global: profile/rank/prestige changes
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_profiles' }, function () { refresh(); });
   ch.subscribe();
 }
@@ -240,8 +247,19 @@ async function refresh() {
       (pr.data || []).forEach(function (pf) { STATE.profilesById[pf.discord_id] = pf; });
     }
     STATE.myProfile = STATE.profilesById[STATE.user.id] || null;
-    var lb = await sb.from('prompt_profiles').select('username,rounds_won,best_streak,title').order('rounds_won', { ascending: false }).limit(8);
+    var lb = await sb.from('prompt_profiles').select('username,prestige,rank,signature').order('prestige', { ascending: false }).limit(8);
     STATE.leaderboard = lb.data || [];
+    // award system: deck (load once), this round's grants (results), my own tags this round
+    if (!STATE.awardDefs.length) {
+      var ad = await sb.from('prompt_award_defs').select('*').eq('active', true);
+      STATE.awardDefs = ad.data || [];
+      STATE.awardsByKey = {};
+      STATE.awardDefs.forEach(function (a) { STATE.awardsByKey[a.key] = a; });
+    }
+    var gr = await sb.from('prompt_award_grants').select('recipient,award_key,rarity').eq('session_id', STATE.sessionId).eq('round', round);
+    STATE.roundGrants = gr.data || [];
+    var mt = await sb.from('prompt_tag_votes').select('submission_id,award_key,slot').eq('session_id', STATE.sessionId).eq('round', round).eq('voter', STATE.user.id);
+    STATE.myTags = mt.data || [];
     render();
   } catch (err) { console.error('refresh:', err); }
 }
@@ -320,58 +338,84 @@ function doSubmit() {
 }
 
 function renderVoting() {
-  var votable = STATE.submissions.filter(function (s) { return s.discord_id !== STATE.user.id; });
-  var didVote = mine(STATE.votes, 'voter_discord_id');
-  var letters = ['🅰️', '🅱️', '🇨', '🇩', '🇪', '🇫', '🇬', '🇭', '🇮'];
+  var crowns = STATE.awardDefs.filter(function (a) { return a.earn === 'hand' && a.valence === 'crown'; });
+  var reads = STATE.awardDefs.filter(function (a) { return a.earn === 'hand' && a.valence !== 'crown'; });
+  var myCrown = STATE.myTags.find(function (t) { return t.slot === 'crown'; });
+  var myRead = STATE.myTags.find(function (t) { return t.slot === 'read'; });
 
-  var cards = votable.map(function (s, i) {
-    var btn = didVote ? '' : '<button class="vote-btn" data-sub="' + s.id + '">' + letters[i] + '</button>';
-    return '<div class="sub-card">' + btn + '<div class="sub-text">&gt; ' + escapeHtml(s.text) + '</div></div>';
+  var crownOpts = crowns.map(function (a) { return '<option value="' + a.key + '">' + escapeHtml(a.label) + '</option>'; }).join('');
+  var readOpts = reads.map(function (a) { return '<option value="' + a.key + '">' + escapeHtml(a.label) + '</option>'; }).join('');
+
+  var cards = STATE.submissions.map(function (s) {
+    var isMine = s.discord_id === STATE.user.id;
+    var tags = '';
+    if (myCrown && myCrown.submission_id === s.id) tags += '<span class="my-tag">👑 ' + escapeHtml((STATE.awardsByKey[myCrown.award_key] || {}).label || '') + '</span>';
+    if (myRead && myRead.submission_id === s.id) tags += '<span class="my-tag">🏷️ ' + escapeHtml((STATE.awardsByKey[myRead.award_key] || {}).label || '') + '</span>';
+    var actions = '<div class="sub-actions">' +
+      (isMine
+        ? '<span class="muted">your prompt</span>'
+        : '<button class="crown-btn" data-sub="' + s.id + '"' + (myCrown ? ' disabled' : '') + '>👑 crown</button>') +
+      '<button class="read-btn" data-sub="' + s.id + '"' + (myRead ? ' disabled' : '') + '>🏷️ read</button>' +
+      '</div>';
+    return '<div class="sub-card2"><div class="sub-text">&gt; ' + escapeHtml(s.text) + '</div>' + tags + actions + '</div>';
   }).join('');
+
+  var status = (myCrown ? '👑 crown cast' : '👑 crown REQUIRED') + ' &nbsp;·&nbsp; ' + (myRead ? '🏷️ read cast' : '🏷️ read optional');
 
   el('game').innerHTML =
     '<div class="panel"><div class="label">&gt;&gt; The AI answered</div>' +
     '<div class="transmission-small">"' + escapeHtml(STATE.session.current_response) + '"</div></div>' +
-    '<div class="prompt-line"><span class="arrow">&gt;</span> WHICH PROMPT CAUSED IT? (no self-votes)</div>' +
-    '<div class="subs">' + (cards || '<span class="muted">no other prompts to vote on</span>') + '</div>' +
-    (didVote ? '<div class="muted">🔒 vote locked — waiting (' + STATE.votes.length + '/' + STATE.players.length + ')</div>' : '') +
+    '<div class="prompt-line"><span class="arrow">&gt;</span> CROWN the best reconstruction, then optionally drop a READ:</div>' +
+    '<div class="award-pickers">CROWN <select id="crown-sel">' + crownOpts + '</select> &nbsp; READ <select id="read-sel">' + readOpts + '</select></div>' +
+    '<div class="subs">' + cards + '</div>' +
+    '<div class="muted">' + status + '</div>' +
     '<div class="row-actions"><button id="skip-btn" class="ghost">force results ▸</button></div>';
 
-  if (!didVote) {
-    Array.prototype.forEach.call(document.querySelectorAll('.vote-btn'), function (b) {
-      b.addEventListener('click', function () {
-        callFn('vote', { voter_discord_id: STATE.user.id, submission_id: b.getAttribute('data-sub') });
-      });
+  Array.prototype.forEach.call(document.querySelectorAll('.crown-btn'), function (b) {
+    b.addEventListener('click', function () {
+      callFn('tagvote', { voter_discord_id: STATE.user.id, submission_id: b.getAttribute('data-sub'), award_key: el('crown-sel').value, slot: 'crown' });
     });
-  }
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.read-btn'), function (b) {
+    b.addEventListener('click', function () {
+      callFn('tagvote', { voter_discord_id: STATE.user.id, submission_id: b.getAttribute('data-sub'), award_key: el('read-sel').value, slot: 'read' });
+    });
+  });
   el('skip-btn').addEventListener('click', function () { callFn('skip', {}); });
 }
 
 function renderResolving() {
-  // tally for display
-  var tally = {};
-  STATE.votes.forEach(function (v) { tally[v.submission_id] = (tally[v.submission_id] || 0) + 1; });
-  var max = 0;
-  Object.keys(tally).forEach(function (k) { if (tally[k] > max) max = tally[k]; });
+  var byKey = STATE.awardsByKey;
+  function scoreOf(sub) {
+    return STATE.roundGrants
+      .filter(function (g) { return g.recipient === sub.discord_id; })
+      .reduce(function (a, g) { return a + ((byKey[g.award_key] || {}).value || 0); }, 0);
+  }
+  var rows = STATE.submissions.slice().sort(function (a, b) { return scoreOf(b) - scoreOf(a); });
+  var top = rows.length ? scoreOf(rows[0]) : 0;
 
-  var rows = STATE.submissions.slice().sort(function (a, b) {
-    return (tally[b.id] || 0) - (tally[a.id] || 0);
-  }).map(function (s) {
-    var n = tally[s.id] || 0;
-    var win = (n === max && max > 0) ? ' win' : '';
+  var html = rows.map(function (s) {
+    var grants = STATE.roundGrants.filter(function (g) { return g.recipient === s.discord_id; });
+    var chips = grants.map(function (g) {
+      var d = byKey[g.award_key] || {};
+      return '<span class="award-chip rarity-' + escapeHtml(g.rarity) + '">' + escapeHtml(d.label || g.award_key) + '</span>';
+    }).join(' ');
+    var win = (scoreOf(s) === top && top > 0) ? ' win' : '';
     return '<div class="result-row' + win + '"><span class="who">' + escapeHtml(s.username) + '</span> ' +
-      '(' + n + ' vote' + (n !== 1 ? 's' : '') + ')<div class="sub-text">&gt; ' + escapeHtml(s.text) + '</div></div>';
+      (win ? '🏆 ' : '') + '<span class="muted">(' + scoreOf(s) + ')</span>' +
+      '<div class="sub-text">&gt; ' + escapeHtml(s.text) + '</div>' +
+      (chips ? '<div class="award-row">' + chips + '</div>' : '<div class="muted">— no awards —</div>') +
+      '</div>';
   }).join('');
 
   el('game').innerHTML =
-    '<div class="panel"><div class="label">&gt;&gt; Round ' + STATE.session.round + ' — Recovered Prompts</div>' +
+    '<div class="panel"><div class="label">&gt;&gt; Round ' + STATE.session.round + ' — Awards</div>' +
     '<div class="transmission-small">"' + escapeHtml(STATE.session.current_response) + '"</div></div>' +
-    '<div class="results">' + rows + '</div>' +
+    '<div class="results">' + html + '</div>' +
     '<div class="row-actions"><button id="next-btn">NEXT ROUND ▸</button></div>';
 
   el('next-btn').addEventListener('click', function () { callFn('next', {}); });
 
-  // Auto-advance at the deadline (idempotent — server only advances once)
   if (STATE.advanceTimer) clearTimeout(STATE.advanceTimer);
   var ms = 9000;
   if (STATE.session.deadline) ms = Math.max(1500, new Date(STATE.session.deadline).getTime() - Date.now());
@@ -390,9 +434,9 @@ function renderScoreboard() {
   }).join('');
   var mine = '';
   if (STATE.myProfile) {
-    mine = '<div class="my-rank">RANK: <b>' + escapeHtml(STATE.myProfile.title || 'UNRANKED') + '</b>' +
-      ' · ' + STATE.myProfile.rounds_won + ' lifetime wins · streak ' + STATE.myProfile.current_streak +
-      ' (best ' + STATE.myProfile.best_streak + ')</div>';
+    var sig = STATE.myProfile.signature ? ' · <b>' + escapeHtml(STATE.myProfile.signature) + '</b>' : '';
+    mine = '<div class="my-rank">RANK: <b>' + escapeHtml(STATE.myProfile.rank || 'UNRANKED') + '</b>' + sig +
+      ' · ' + (STATE.myProfile.prestige || 0) + ' prestige · streak ' + STATE.myProfile.current_streak + '</div>';
   }
   el('scoreboard').innerHTML = (board ? '<div class="label">SCOREBOARD</div>' + board : '') + mine;
 }
@@ -402,10 +446,11 @@ function leaderboardHtml() {
   if (!STATE.leaderboard || !STATE.leaderboard.length) return '';
   var rows = STATE.leaderboard.map(function (p, i) {
     var medal = ['🥇', '🥈', '🥉'][i] || (i + 1) + '.';
-    return '<div class="lb-row">' + medal + ' <span class="who">' + escapeHtml(p.username) + '</span> ' +
-      '<span class="title-tag">' + escapeHtml(p.title || 'UNRANKED') + '</span> · ' + p.rounds_won + 'w</div>';
+    var sig = p.signature ? ' <span class="title-tag">' + escapeHtml(p.signature) + '</span>' : '';
+    return '<div class="lb-row">' + medal + ' <span class="who">' + escapeHtml(p.username) + '</span>' + sig +
+      ' · ' + (p.prestige || 0) + 'p</div>';
   }).join('');
-  return '<div class="panel"><div class="label">🏆 Hall of Fame — all-time</div><div class="leaderboard">' + rows + '</div></div>';
+  return '<div class="panel"><div class="label">🏆 Hall of Fame — by prestige</div><div class="leaderboard">' + rows + '</div></div>';
 }
 
 // paint the transmission, animating only when the response text changes
