@@ -74,7 +74,9 @@ var STATE = {
   awardsByKey: {},      // key -> award def
   roundGrants: [],      // awards granted this round (for the results screen)
   myTags: [],           // my crown/read this round
-  myTitles: []          // my unlocked title collection (for the picker)
+  myTitles: [],         // my unlocked title collection (for the picker)
+  disputes: [],         // disputes this round
+  disputeVotes: []      // votes on this round's disputes
 };
 
 // ── Small helpers ──────────────────────────────────────────────────────────
@@ -223,6 +225,8 @@ function subscribe() {
   // award-system tables (session-scoped)
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_tag_votes', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_award_grants', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_disputes', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_dispute_votes' }, function () { refresh(); });
   // global: profile/rank/prestige changes
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_profiles' }, function () { refresh(); });
   ch.subscribe();
@@ -259,8 +263,16 @@ async function refresh() {
       STATE.awardsByKey = {};
       STATE.awardDefs.forEach(function (a) { STATE.awardsByKey[a.key] = a; });
     }
-    var gr = await sb.from('prompt_award_grants').select('recipient,award_key,rarity').eq('session_id', STATE.sessionId).eq('round', round);
+    var gr = await sb.from('prompt_award_grants').select('id,recipient,award_key,rarity').eq('session_id', STATE.sessionId).eq('round', round);
     STATE.roundGrants = gr.data || [];
+    var dsp = await sb.from('prompt_disputes').select('*').eq('session_id', STATE.sessionId).eq('round', round);
+    STATE.disputes = dsp.data || [];
+    STATE.disputeVotes = [];
+    var dispIds = STATE.disputes.map(function (d) { return d.id; });
+    if (dispIds.length) {
+      var dv = await sb.from('prompt_dispute_votes').select('*').in('dispute_id', dispIds);
+      STATE.disputeVotes = dv.data || [];
+    }
     var mt = await sb.from('prompt_tag_votes').select('submission_id,award_key,slot').eq('session_id', STATE.sessionId).eq('round', round).eq('voter', STATE.user.id);
     STATE.myTags = mt.data || [];
     render();
@@ -401,18 +413,47 @@ function renderVoting() {
 function renderResolving() {
   var byKey = STATE.awardsByKey;
   function scoreOf(sub) {
-    return STATE.roundGrants
-      .filter(function (g) { return g.recipient === sub.discord_id; })
+    return STATE.roundGrants.filter(function (g) { return g.recipient === sub.discord_id; })
       .reduce(function (a, g) { return a + ((byKey[g.award_key] || {}).value || 0); }, 0);
   }
+  function nameOf(id) { var p = STATE.players.find(function (x) { return x.id === id; }); return p ? p.username : id; }
+
+  var myDispute = STATE.disputes.find(function (d) { return d.disputer === STATE.user.id; });
+  var openDisputes = STATE.disputes.filter(function (d) { return d.status === 'open'; });
+
+  // open dispute → table votes uphold/overturn
+  var disputeHtml = openDisputes.map(function (d) {
+    var votes = STATE.disputeVotes.filter(function (v) { return v.dispute_id === d.id; });
+    var up = votes.filter(function (v) { return v.uphold; }).length;
+    var over = votes.length - up;
+    var amDisputer = d.disputer === STATE.user.id;
+    var iVoted = votes.some(function (v) { return v.voter === STATE.user.id; });
+    var awardLabel = (byKey[d.award_key] || {}).label || d.award_key;
+    var ctrl = (amDisputer || iVoted)
+      ? '<span class="muted">' + (amDisputer ? 'awaiting the verdict...' : 'voted') + '</span>'
+      : '<button class="dv-up" data-d="' + d.id + '">UPHOLD</button> <button class="dv-over" data-d="' + d.id + '">OVERTURN</button>';
+    return '<div class="panel dispute-panel"><div class="label">⚖️ DISPUTE</div>' +
+      '<div class="sub-text"><b>' + escapeHtml(nameOf(d.disputer)) + '</b> contests <span class="award-chip">' + escapeHtml(awardLabel) + '</span> — does it stick?</div>' +
+      '<div class="row-actions">' + ctrl + '</div>' +
+      '<div class="muted">uphold ' + up + ' · overturn ' + over + '</div></div>';
+  }).join('');
+
+  var resolvedHtml = STATE.disputes.filter(function (d) { return d.status !== 'open'; }).map(function (d) {
+    var awardLabel = (byKey[d.award_key] || {}).label || d.award_key;
+    return '<div class="muted">⚖️ ' + escapeHtml(awardLabel) + (d.status === 'overturned' ? ' — STRUCK by the table' : ' — UPHELD') + '</div>';
+  }).join('');
+
   var rows = STATE.submissions.slice().sort(function (a, b) { return scoreOf(b) - scoreOf(a); });
   var top = rows.length ? scoreOf(rows[0]) : 0;
 
   var html = rows.map(function (s) {
     var grants = STATE.roundGrants.filter(function (g) { return g.recipient === s.discord_id; });
+    var isMine = s.discord_id === STATE.user.id;
     var chips = grants.map(function (g) {
       var d = byKey[g.award_key] || {};
-      return '<span class="award-chip rarity-' + escapeHtml(g.rarity) + '">' + escapeHtml(d.label || g.award_key) + '</span>';
+      var canDispute = isMine && !myDispute;
+      var dbtn = canDispute ? ' <button class="dispute-btn" data-grant="' + g.id + '" title="dispute this tag">⚖️</button>' : '';
+      return '<span class="award-chip rarity-' + escapeHtml(g.rarity) + '">' + escapeHtml(d.label || g.award_key) + '</span>' + dbtn;
     }).join(' ');
     var win = (scoreOf(s) === top && top > 0) ? ' win' : '';
     return '<div class="result-row' + win + '"><span class="who">' + escapeHtml(s.username) + '</span> ' +
@@ -425,15 +466,28 @@ function renderResolving() {
   el('game').innerHTML =
     '<div class="panel"><div class="label">&gt;&gt; Round ' + STATE.session.round + ' — Awards</div>' +
     '<div class="transmission-small">"' + escapeHtml(STATE.session.current_response) + '"</div></div>' +
+    disputeHtml + (resolvedHtml ? '<div class="results">' + resolvedHtml + '</div>' : '') +
     '<div class="results">' + html + '</div>' +
-    '<div class="row-actions"><button id="next-btn">NEXT ROUND ▸</button></div>';
+    '<div class="row-actions"><button id="next-btn"' + (openDisputes.length ? ' disabled' : '') + '>NEXT ROUND ▸</button></div>';
 
-  el('next-btn').addEventListener('click', function () { callFn('next', {}); });
+  Array.prototype.forEach.call(document.querySelectorAll('.dispute-btn'), function (b) {
+    b.addEventListener('click', function () { callFn('dispute', { grant_id: b.getAttribute('data-grant'), disputer: STATE.user.id }); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.dv-up'), function (b) {
+    b.addEventListener('click', function () { callFn('disputevote', { dispute_id: b.getAttribute('data-d'), voter: STATE.user.id, uphold: true }); });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.dv-over'), function (b) {
+    b.addEventListener('click', function () { callFn('disputevote', { dispute_id: b.getAttribute('data-d'), voter: STATE.user.id, uphold: false }); });
+  });
+  var nb = el('next-btn'); if (nb) nb.addEventListener('click', function () { callFn('next', {}); });
 
+  // auto-advance only when no dispute is open
   if (STATE.advanceTimer) clearTimeout(STATE.advanceTimer);
-  var ms = 9000;
-  if (STATE.session.deadline) ms = Math.max(1500, new Date(STATE.session.deadline).getTime() - Date.now());
-  STATE.advanceTimer = setTimeout(function () { callFn('next', {}); }, ms);
+  if (!openDisputes.length) {
+    var ms = 12000;
+    if (STATE.session.deadline) ms = Math.max(2000, new Date(STATE.session.deadline).getTime() - Date.now());
+    STATE.advanceTimer = setTimeout(function () { callFn('next', {}); }, ms);
+  }
 }
 
 function renderGameOver() {

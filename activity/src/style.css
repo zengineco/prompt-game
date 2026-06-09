@@ -375,6 +375,12 @@ button.ghost:hover { background: rgba(31, 156, 67, 0.12); }
 .rarity-epic      { color: #c061ff; text-shadow: 0 0 5px rgba(192,97,255,0.5); }
 .rarity-legendary { color: #ffcf4d; text-shadow: 0 0 6px rgba(255,207,77,0.6); }
 
+.dispute-panel { border-color: #ffcf4d; box-shadow: inset 0 0 12px rgba(255,207,77,0.12); }
+.dispute-btn { font-size: 11px; padding: 0 6px; border-color: var(--phosphor-dim); margin-left: 2px; }
+.dv-up, .dv-over { padding: 5px 16px; font-size: 13px; letter-spacing: 1px; }
+.dv-over { border-color: #ff5c5c; color: #ff5c5c; }
+.dv-over:hover { background: rgba(255,92,92,0.12); }
+
 .champion {
   font-family: 'VT323', monospace;
   font-size: 26px;
