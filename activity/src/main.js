@@ -77,7 +77,9 @@ var STATE = {
   myTitles: [],         // my unlocked title collection (for the picker)
   disputes: [],         // disputes this round
   disputeVotes: [],     // votes on this round's disputes
-  reports: []           // content reports this round (who flagged what)
+  reports: [],          // content reports this round (who flagged what)
+  homeInstanceId: null, // the friends/guest room to return to after a public game
+  channel: null         // active realtime channel (so we can swap it when matchmaking)
 };
 
 // ── Small helpers ──────────────────────────────────────────────────────────
@@ -212,6 +214,36 @@ function initGuest() {
 async function joinSession() {
   var res = await callFn('join', { discord_id: STATE.user.id, username: STATE.user.username });
   if (res && res.session_id) STATE.sessionId = res.session_id;
+  if (!STATE.homeInstanceId) STATE.homeInstanceId = STATE.instanceId; // remember the room we came from
+}
+
+// ── Matchmaking — hop between the home room and a public stranger table ──────
+async function switchSession(instanceId, sessionId) {
+  if (STATE.channel) { try { STATE.supabase.removeChannel(STATE.channel); } catch (e) {} STATE.channel = null; }
+  STATE.instanceId = instanceId;
+  STATE.sessionId = sessionId;
+  STATE.lastPhase = null;       // force a CRT flash on the new table
+  STATE.submissions = []; STATE.roundGrants = []; STATE.disputes = []; STATE.reports = [];
+  subscribe();
+  await refresh();
+}
+
+async function findGame(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'searching for a table…'; }
+  try {
+    var res = await callFn('findgame', { discord_id: STATE.user.id, username: STATE.user.username });
+    if (res && res.session_id) await switchSession(res.instance_id, res.session_id);
+  } catch (e) {
+    console.error('findGame:', e);
+    if (btn) { btn.disabled = false; btn.textContent = '🌐 FIND A PUBLIC GAME'; }
+  }
+}
+
+async function leavePublic() {
+  try { await callFn('leavegame', { discord_id: STATE.user.id }); } catch (e) {}
+  STATE.instanceId = STATE.homeInstanceId;            // point callFn at home
+  var res = await callFn('join', { discord_id: STATE.user.id, username: STATE.user.username });
+  await switchSession(STATE.homeInstanceId, res && res.session_id);
 }
 
 // ── Realtime: any change to this session → refetch + render ────────────────
@@ -232,6 +264,7 @@ function subscribe() {
   // global: profile/rank/prestige changes
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_profiles' }, function () { refresh(); });
   ch.subscribe();
+  STATE.channel = ch;
 }
 
 async function refresh() {
@@ -302,6 +335,7 @@ function render() {
 }
 
 function renderLobby() {
+  if (STATE.session.is_public) return renderPublicWaiting();
   var roster = STATE.players.map(function (p) { return '<div class="chip">▸ ' + escapeHtml(p.username) + '</div>'; }).join('');
   var opts = CATEGORIES.map(function (c) {
     return '<option value="' + c.key + '"' + (c.key === STATE.category ? ' selected' : '') + '>' + c.label + '</option>';
@@ -315,6 +349,8 @@ function renderLobby() {
     '<select id="rounds-select"><option value="3">3 rounds</option><option value="5" selected>5 rounds</option><option value="7">7 rounds</option></select>' +
     '<button id="start-btn"' + (canStart ? '' : ' disabled') + '>START</button></div>' +
     (canStart ? '' : '<div class="muted">need 2+ players to start</div>') +
+    '<div class="prompt-line"><span class="arrow">&gt;</span> NO FRIENDS ONLINE?</div>' +
+    '<div class="row-actions"><button id="findgame-btn" class="ghost">🌐 FIND A PUBLIC GAME</button></div>' +
     titlePickerHtml() +
     leaderboardHtml();
   el('cat-select').addEventListener('change', function (e) { STATE.category = e.target.value; });
@@ -322,11 +358,32 @@ function renderLobby() {
     var rounds = parseInt(el('rounds-select').value) || 5;
     callFn('start', { category: STATE.category, rounds: rounds });
   });
+  el('findgame-btn').addEventListener('click', function () { findGame(el('findgame-btn')); });
   if (el('title-sel')) {
     el('title-sel').addEventListener('change', function (e) {
       STATE.supabase.rpc('prompt_set_title', { p_discord: STATE.user.id, p_title_key: e.target.value }).then(function () { refresh(); });
     });
   }
+}
+
+// Public matchmaking waiting room — strangers gather here; auto-starts at 3.
+function renderPublicWaiting() {
+  var n = STATE.players.length;
+  var roster = STATE.players.map(function (p) {
+    var me = p.id === STATE.user.id ? ' (you)' : '';
+    return '<div class="chip">▸ ' + escapeHtml(p.username) + me + '</div>';
+  }).join('');
+  el('game').innerHTML =
+    '<div class="panel"><div class="label">&gt;&gt; PUBLIC TABLE — matchmaking</div>' +
+    '<div class="roster">' + (roster || '<span class="muted">you\'re first in...</span>') + '</div></div>' +
+    '<div class="prompt-line"><span class="arrow">&gt;</span> WAITING FOR PLAYERS — ' + n + '/3 to start <span class="muted">(seats up to 8)</span></div>' +
+    '<div class="muted">the table auto-starts the moment a third stranger sits down.</div>' +
+    '<div class="row-actions"><button id="leave-btn" class="ghost">◂ leave table</button></div>' +
+    leaderboardHtml();
+  el('leave-btn').addEventListener('click', function () {
+    var b = el('leave-btn'); b.disabled = true; b.textContent = 'leaving…';
+    leavePublic();
+  });
 }
 
 function renderResponding() {
@@ -543,9 +600,11 @@ function renderGameOver() {
       (champProf.calltag ? ', the <b>' + escapeHtml(champProf.calltag) + '</b>' : '') + '</div>' : '') +
     '</div>' +
     '<div class="results">' + standings + '</div>' +
-    '<div class="row-actions"><button id="again-btn">▸ PLAY AGAIN</button></div>';
+    '<div class="row-actions"><button id="again-btn">▸ PLAY AGAIN</button>' +
+    '<button id="findgame-btn" class="ghost">🌐 FIND ANOTHER GAME</button></div>';
 
   el('again-btn').addEventListener('click', function () { callFn('reset', {}); });
+  el('findgame-btn').addEventListener('click', function () { findGame(el('findgame-btn')); });
 }
 
 function renderScoreboard() {
