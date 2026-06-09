@@ -73,7 +73,8 @@ var STATE = {
   awardDefs: [],        // the award deck (registry)
   awardsByKey: {},      // key -> award def
   roundGrants: [],      // awards granted this round (for the results screen)
-  myTags: []            // my crown/read this round
+  myTags: [],           // my crown/read this round
+  myTitles: []          // my unlocked title collection (for the picker)
 };
 
 // ── Small helpers ──────────────────────────────────────────────────────────
@@ -247,8 +248,10 @@ async function refresh() {
       (pr.data || []).forEach(function (pf) { STATE.profilesById[pf.discord_id] = pf; });
     }
     STATE.myProfile = STATE.profilesById[STATE.user.id] || null;
-    var lb = await sb.from('prompt_profiles').select('username,prestige,rank,signature').order('prestige', { ascending: false }).limit(8);
+    var lb = await sb.from('prompt_profiles').select('username,prestige,rank,calltag').order('prestige', { ascending: false }).limit(8);
     STATE.leaderboard = lb.data || [];
+    var mtt = await sb.from('prompt_player_titles').select('*').eq('discord_id', STATE.user.id).order('tier', { ascending: false });
+    STATE.myTitles = mtt.data || [];
     // award system: deck (load once), this round's grants (results), my own tags this round
     if (!STATE.awardDefs.length) {
       var ad = await sb.from('prompt_award_defs').select('*').eq('active', true);
@@ -296,12 +299,18 @@ function renderLobby() {
     '<select id="rounds-select"><option value="3">3 rounds</option><option value="5" selected>5 rounds</option><option value="7">7 rounds</option></select>' +
     '<button id="start-btn"' + (canStart ? '' : ' disabled') + '>START</button></div>' +
     (canStart ? '' : '<div class="muted">need 2+ players to start</div>') +
+    titlePickerHtml() +
     leaderboardHtml();
   el('cat-select').addEventListener('change', function (e) { STATE.category = e.target.value; });
   el('start-btn').addEventListener('click', function () {
     var rounds = parseInt(el('rounds-select').value) || 5;
     callFn('start', { category: STATE.category, rounds: rounds });
   });
+  if (el('title-sel')) {
+    el('title-sel').addEventListener('change', function (e) {
+      STATE.supabase.rpc('prompt_set_title', { p_discord: STATE.user.id, p_title_key: e.target.value }).then(function () { refresh(); });
+    });
+  }
 }
 
 function renderResponding() {
@@ -434,7 +443,7 @@ function renderGameOver() {
   var standings = sorted.map(function (p, i) {
     var medal = ['🥇', '🥈', '🥉'][i] || (i + 1) + '.';
     var prof = STATE.profilesById[p.id] || {};
-    var sig = prof.signature ? ' <span class="title-tag">' + escapeHtml(prof.signature) + '</span>' : '';
+    var sig = prof.calltag ? ' <span class="title-tag">' + escapeHtml(prof.calltag) + '</span>' : '';
     return '<div class="result-row' + (i === 0 ? ' win' : '') + '">' + medal + ' <span class="who">' +
       escapeHtml(p.username) + '</span>' + sig + ' — ' + p.score + ' pts</div>';
   }).join('');
@@ -442,7 +451,7 @@ function renderGameOver() {
   el('game').innerHTML =
     '<div class="panel"><div class="label">&gt;&gt; GAME OVER</div>' +
     (champ ? '<div class="champion">🏆 CHAMPION: <b>' + escapeHtml(champ.username) + '</b>' +
-      (champProf.signature ? ', the <b>' + escapeHtml(champProf.signature) + '</b>' : '') + '</div>' : '') +
+      (champProf.calltag ? ', the <b>' + escapeHtml(champProf.calltag) + '</b>' : '') + '</div>' : '') +
     '</div>' +
     '<div class="results">' + standings + '</div>' +
     '<div class="row-actions"><button id="again-btn">▸ PLAY AGAIN</button></div>';
@@ -457,14 +466,14 @@ function renderScoreboard() {
     var m = medals[i] || (i + 1) + '.';
     var me = p.id === STATE.user.id ? ' (you)' : '';
     var prof = STATE.profilesById[p.id];
-    var title = (prof && prof.title) ? ' <span class="title-tag">' + escapeHtml(prof.title) + '</span>' : '';
+    var title = (prof && prof.calltag) ? ' <span class="title-tag">' + escapeHtml(prof.calltag) + '</span>' : '';
     return '<span class="score-chip">' + m + ' ' + escapeHtml(p.username) + me + title + ' — ' + p.score + '</span>';
   }).join('');
   var mine = '';
   if (STATE.myProfile) {
-    var sig = STATE.myProfile.signature ? ' · <b>' + escapeHtml(STATE.myProfile.signature) + '</b>' : '';
-    mine = '<div class="my-rank">RANK: <b>' + escapeHtml(STATE.myProfile.rank || 'UNRANKED') + '</b>' + sig +
-      ' · ' + (STATE.myProfile.prestige || 0) + ' prestige · streak ' + STATE.myProfile.current_streak + '</div>';
+    var tag = STATE.myProfile.calltag ? ' · <b>' + escapeHtml(STATE.myProfile.calltag) + '</b>' : '';
+    mine = '<div class="my-rank">RANK: <b>' + escapeHtml(STATE.myProfile.rank || 'UNRANKED') + '</b>' + tag +
+      ' · ' + (STATE.myProfile.prestige || 0) + ' prestige</div>';
   }
   el('scoreboard').innerHTML = (board ? '<div class="label">SCOREBOARD</div>' + board : '') + mine;
 }
@@ -474,11 +483,28 @@ function leaderboardHtml() {
   if (!STATE.leaderboard || !STATE.leaderboard.length) return '';
   var rows = STATE.leaderboard.map(function (p, i) {
     var medal = ['🥇', '🥈', '🥉'][i] || (i + 1) + '.';
-    var sig = p.signature ? ' <span class="title-tag">' + escapeHtml(p.signature) + '</span>' : '';
+    var sig = p.calltag ? ' <span class="title-tag">' + escapeHtml(p.calltag) + '</span>' : '';
     return '<div class="lb-row">' + medal + ' <span class="who">' + escapeHtml(p.username) + '</span>' + sig +
       ' · ' + (p.prestige || 0) + 'p</div>';
   }).join('');
   return '<div class="panel"><div class="label">🏆 Hall of Fame — by prestige</div><div class="leaderboard">' + rows + '</div></div>';
+}
+
+// Title picker — wear any title you've unlocked (combos rank above ladders)
+function titlePickerHtml() {
+  if (!STATE.myProfile || !STATE.myTitles.length) return '';
+  var chosen = STATE.myProfile.chosen_title;
+  var opts = STATE.myTitles.slice().sort(function (a, b) {
+    var ra = a.kind === 'combo' ? a.tier + 1000 : a.tier;
+    var rb = b.kind === 'combo' ? b.tier + 1000 : b.tier;
+    return rb - ra;
+  }).map(function (t) {
+    var sel = (chosen === t.title_key) ? ' selected' : '';
+    var tag = t.kind === 'combo' ? ' (' + t.tier + '-way)' : '';
+    return '<option value="' + escapeHtml(t.title_key) + '"' + sel + '>' + escapeHtml(t.label) + tag + '</option>';
+  }).join('');
+  return '<div class="prompt-line"><span class="arrow">&gt;</span> YOUR TITLE — wear what you earned:</div>' +
+    '<div class="input-row"><select id="title-sel">' + opts + '</select></div>';
 }
 
 // paint the transmission, animating only when the response text changes
