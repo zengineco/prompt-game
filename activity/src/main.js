@@ -277,7 +277,8 @@ function render() {
   else if (phase === 'responding') renderResponding();
   else if (phase === 'voting') renderVoting();
   else if (phase === 'resolving') renderResolving();
-  else el('game').innerHTML = '<div class="muted">game over</div>';
+  else if (phase === 'ended') renderGameOver();
+  else el('game').innerHTML = '<div class="muted">connecting...</div>';
   renderScoreboard();
 }
 
@@ -292,11 +293,15 @@ function renderLobby() {
     '<div class="roster">' + (roster || '<span class="muted">waiting for players...</span>') + '</div></div>' +
     '<div class="prompt-line"><span class="arrow">&gt;</span> DECK:</div>' +
     '<div class="input-row"><select id="cat-select">' + opts + '</select>' +
+    '<select id="rounds-select"><option value="3">3 rounds</option><option value="5" selected>5 rounds</option><option value="7">7 rounds</option></select>' +
     '<button id="start-btn"' + (canStart ? '' : ' disabled') + '>START</button></div>' +
     (canStart ? '' : '<div class="muted">need 2+ players to start</div>') +
     leaderboardHtml();
   el('cat-select').addEventListener('change', function (e) { STATE.category = e.target.value; });
-  el('start-btn').addEventListener('click', function () { callFn('start', { category: STATE.category }); });
+  el('start-btn').addEventListener('click', function () {
+    var rounds = parseInt(el('rounds-select').value) || 5;
+    callFn('start', { category: STATE.category, rounds: rounds });
+  });
 }
 
 function renderResponding() {
@@ -420,6 +425,29 @@ function renderResolving() {
   var ms = 9000;
   if (STATE.session.deadline) ms = Math.max(1500, new Date(STATE.session.deadline).getTime() - Date.now());
   STATE.advanceTimer = setTimeout(function () { callFn('next', {}); }, ms);
+}
+
+function renderGameOver() {
+  var sorted = STATE.players.slice().sort(function (a, b) { return b.score - a.score; });
+  var champ = sorted[0];
+  var champProf = champ ? (STATE.profilesById[champ.id] || {}) : {};
+  var standings = sorted.map(function (p, i) {
+    var medal = ['🥇', '🥈', '🥉'][i] || (i + 1) + '.';
+    var prof = STATE.profilesById[p.id] || {};
+    var sig = prof.signature ? ' <span class="title-tag">' + escapeHtml(prof.signature) + '</span>' : '';
+    return '<div class="result-row' + (i === 0 ? ' win' : '') + '">' + medal + ' <span class="who">' +
+      escapeHtml(p.username) + '</span>' + sig + ' — ' + p.score + ' pts</div>';
+  }).join('');
+
+  el('game').innerHTML =
+    '<div class="panel"><div class="label">&gt;&gt; GAME OVER</div>' +
+    (champ ? '<div class="champion">🏆 CHAMPION: <b>' + escapeHtml(champ.username) + '</b>' +
+      (champProf.signature ? ', the <b>' + escapeHtml(champProf.signature) + '</b>' : '') + '</div>' : '') +
+    '</div>' +
+    '<div class="results">' + standings + '</div>' +
+    '<div class="row-actions"><button id="again-btn">▸ PLAY AGAIN</button></div>';
+
+  el('again-btn').addEventListener('click', function () { callFn('reset', {}); });
 }
 
 function renderScoreboard() {

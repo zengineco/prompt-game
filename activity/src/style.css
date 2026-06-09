@@ -375,6 +375,15 @@ button.ghost:hover { background: rgba(31, 156, 67, 0.12); }
 .rarity-epic      { color: #c061ff; text-shadow: 0 0 5px rgba(192,97,255,0.5); }
 .rarity-legendary { color: #ffcf4d; text-shadow: 0 0 6px rgba(255,207,77,0.6); }
 
+.champion {
+  font-family: 'VT323', monospace;
+  font-size: 26px;
+  margin-top: 10px;
+  color: #ffcf4d;
+  text-shadow: 0 0 8px rgba(255,207,77,0.6);
+  letter-spacing: 1px;
+}
+
 /* Accessibility: respect reduced-motion (WCAG) — kill flicker/scanline animation */
 @media (prefers-reduced-motion: reduce) {
   .crt-screen::after { animation: none; }
