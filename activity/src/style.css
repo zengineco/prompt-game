@@ -393,6 +393,17 @@ button.ghost:hover { background: rgba(31, 156, 67, 0.12); }
 .sub-card2.removed, .result-row.removed { opacity: 0.55; border-style: dashed; }
 .sub-card2.removed .sub-text { color: #ff5c5c; }
 
+/* leaderboard tabs */
+.lb-tabs { display: flex; gap: 6px; margin: 4px 0 10px; }
+.lb-tab {
+  font-size: 12px; padding: 4px 11px; letter-spacing: 1px;
+  color: var(--phosphor-dim); border: 1px solid var(--phosphor-dim); background: transparent;
+}
+.lb-tab.on {
+  color: var(--phosphor); border-color: var(--phosphor);
+  box-shadow: inset 0 0 8px rgba(51,255,102,0.14);
+}
+
 .champion {
   font-family: 'VT323', monospace;
   font-size: 26px;

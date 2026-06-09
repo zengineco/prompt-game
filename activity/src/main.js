@@ -79,7 +79,8 @@ var STATE = {
   disputeVotes: [],     // votes on this round's disputes
   reports: [],          // content reports this round (who flagged what)
   homeInstanceId: null, // the friends/guest room to return to after a public game
-  channel: null         // active realtime channel (so we can swap it when matchmaking)
+  channel: null,        // active realtime channel (so we can swap it when matchmaking)
+  lbTab: 'global'       // leaderboard view: 'global' | 'friends'
 };
 
 // ── Small helpers ──────────────────────────────────────────────────────────
@@ -332,6 +333,7 @@ function render() {
   else if (phase === 'ended') renderGameOver();
   else el('game').innerHTML = '<div class="muted">connecting...</div>';
   renderScoreboard();
+  scheduleAutoAdvance();
 }
 
 function renderLobby() {
@@ -364,6 +366,7 @@ function renderLobby() {
       STATE.supabase.rpc('prompt_set_title', { p_discord: STATE.user.id, p_title_key: e.target.value }).then(function () { refresh(); });
     });
   }
+  wireLeaderboardTabs();
 }
 
 // Public matchmaking waiting room — strangers gather here; auto-starts at 3.
@@ -384,6 +387,7 @@ function renderPublicWaiting() {
     var b = el('leave-btn'); b.disabled = true; b.textContent = 'leaving…';
     leavePublic();
   });
+  wireLeaderboardTabs();
 }
 
 function renderResponding() {
@@ -572,14 +576,30 @@ function renderResolving() {
     b.addEventListener('click', function () { callFn('disputevote', { dispute_id: b.getAttribute('data-d'), voter: STATE.user.id, uphold: false }); });
   });
   var nb = el('next-btn'); if (nb) nb.addEventListener('click', function () { callFn('next', {}); });
+  // (auto-advance is handled globally by scheduleAutoAdvance() in render())
+}
 
-  // auto-advance only when no dispute is open
-  if (STATE.advanceTimer) clearTimeout(STATE.advanceTimer);
-  if (!openDisputes.length) {
-    var ms = 12000;
-    if (STATE.session.deadline) ms = Math.max(2000, new Date(STATE.session.deadline).getTime() - Date.now());
-    STATE.advanceTimer = setTimeout(function () { callFn('next', {}); }, ms);
-  }
+// ── AFK auto-advance — keep a table moving even if someone goes silent ───────
+// Every timed phase carries a server deadline. When it passes, ONE client fires
+// the advance. We stagger by roster position so if the first player's tab is
+// gone, the next picks it up ~1.5s later — no single AFK player can stall it.
+function scheduleAutoAdvance() {
+  if (STATE.advanceTimer) { clearTimeout(STATE.advanceTimer); STATE.advanceTimer = null; }
+  var s = STATE.session;
+  if (!s || !s.deadline) return;
+  var phase = s.phase;
+  var action = (phase === 'responding' || phase === 'voting') ? 'skip'
+    : (phase === 'resolving') ? 'next' : null;
+  if (!action) return;
+  // don't auto-advance the results while a dispute is still being argued
+  if (phase === 'resolving' && STATE.disputes.some(function (d) { return d.status === 'open'; })) return;
+  var ids = STATE.players.map(function (p) { return p.id; }).sort();
+  var myIdx = ids.indexOf(STATE.user.id); if (myIdx < 0) myIdx = ids.length;
+  var fireAt = new Date(s.deadline).getTime() + myIdx * 1500; // staggered single-firer
+  var ms = Math.max(1000, fireAt - Date.now());
+  STATE.advanceTimer = setTimeout(function () {
+    if (STATE.session && STATE.session.phase === phase) callFn(action, {}); // re-check phase before firing
+  }, ms);
 }
 
 function renderGameOver() {
@@ -626,16 +646,39 @@ function renderScoreboard() {
   el('scoreboard').innerHTML = (board ? '<div class="label">SCOREBOARD</div>' + board : '') + mine;
 }
 
-// All-time cross-game leaderboard (shown in the lobby — the "reason to return")
+// Leaderboard — two views: GLOBAL (all-time) and THIS ROOM (who you're with now).
+// The all-time board is the reason to return; the room board is bragging rights live.
 function leaderboardHtml() {
-  if (!STATE.leaderboard || !STATE.leaderboard.length) return '';
-  var rows = STATE.leaderboard.map(function (p, i) {
+  var tab = STATE.lbTab || 'global';
+  var rows;
+  if (tab === 'friends') {
+    rows = STATE.players.map(function (p) {
+      var prof = STATE.profilesById[p.id] || {};
+      return { username: p.username, prestige: prof.prestige || 0, calltag: prof.calltag };
+    }).sort(function (a, b) { return (b.prestige || 0) - (a.prestige || 0); });
+  } else {
+    rows = (STATE.leaderboard || []).slice();
+  }
+  var body = rows.map(function (p, i) {
     var medal = ['🥇', '🥈', '🥉'][i] || (i + 1) + '.';
     var sig = p.calltag ? ' <span class="title-tag">' + escapeHtml(p.calltag) + '</span>' : '';
     return '<div class="lb-row">' + medal + ' <span class="who">' + escapeHtml(p.username) + '</span>' + sig +
       ' · ' + (p.prestige || 0) + 'p</div>';
-  }).join('');
-  return '<div class="panel"><div class="label">🏆 Hall of Fame — by prestige</div><div class="leaderboard">' + rows + '</div></div>';
+  }).join('') || '<div class="muted">no rankings yet — play a game</div>';
+  var tabs = '<div class="lb-tabs">' +
+    '<button class="lb-tab' + (tab === 'global' ? ' on' : '') + '" data-tab="global">🌐 GLOBAL</button>' +
+    '<button class="lb-tab' + (tab === 'friends' ? ' on' : '') + '" data-tab="friends">👥 THIS ROOM</button>' +
+    '</div>';
+  var heading = tab === 'friends' ? 'This Room — by prestige' : 'Hall of Fame — all-time prestige';
+  return '<div class="panel"><div class="label">🏆 ' + heading + '</div>' + tabs +
+    '<div class="leaderboard">' + body + '</div></div>';
+}
+
+// wire the GLOBAL/THIS-ROOM toggle (called after any render that shows the board)
+function wireLeaderboardTabs() {
+  Array.prototype.forEach.call(document.querySelectorAll('.lb-tab'), function (b) {
+    b.addEventListener('click', function () { STATE.lbTab = b.getAttribute('data-tab'); render(); });
+  });
 }
 
 // Title picker — wear any title you've unlocked (combos rank above ladders)
