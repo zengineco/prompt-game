@@ -76,7 +76,8 @@ var STATE = {
   myTags: [],           // my crown/read this round
   myTitles: [],         // my unlocked title collection (for the picker)
   disputes: [],         // disputes this round
-  disputeVotes: []      // votes on this round's disputes
+  disputeVotes: [],     // votes on this round's disputes
+  reports: []           // content reports this round (who flagged what)
 };
 
 // ── Small helpers ──────────────────────────────────────────────────────────
@@ -227,6 +228,7 @@ function subscribe() {
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_award_grants', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_disputes', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_dispute_votes' }, function () { refresh(); });
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_reports', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
   // global: profile/rank/prestige changes
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_profiles' }, function () { refresh(); });
   ch.subscribe();
@@ -275,6 +277,8 @@ async function refresh() {
     }
     var mt = await sb.from('prompt_tag_votes').select('submission_id,award_key,slot').eq('session_id', STATE.sessionId).eq('round', round).eq('voter', STATE.user.id);
     STATE.myTags = mt.data || [];
+    var rp = await sb.from('prompt_reports').select('submission_id,reporter').eq('session_id', STATE.sessionId).eq('round', round);
+    STATE.reports = rp.data || [];
     render();
   } catch (err) { console.error('refresh:', err); }
 }
@@ -337,7 +341,7 @@ function renderResponding() {
   var input = did
     ? '<div class="muted">✅ prompt locked in — waiting (' + doneCount + '/' + total + ')</div>'
     : '<div class="input-row"><input id="guess" type="text" maxlength="160" placeholder="what did someone ask..." autocomplete="off" />' +
-      '<button id="submit-btn">TRANSMIT</button></div>';
+      '<button id="submit-btn">TRANSMIT</button></div><div class="submit-note" id="submit-note"></div>';
 
   el('game').innerHTML =
     '<div class="panel"><div class="label">&gt;&gt; Recovered AI Transmission — Round ' + STATE.session.round + '</div>' +
@@ -357,10 +361,28 @@ function renderResponding() {
 
 function doSubmit() {
   var input = el('guess');
+  var btn = el('submit-btn');
+  var note = el('submit-note');
   var val = (input.value || '').trim();
   if (!val) return;
   input.disabled = true;
-  callFn('submit', { discord_id: STATE.user.id, username: STATE.user.username, text: val });
+  if (btn) btn.disabled = true;
+  if (note) { note.textContent = ''; note.className = 'submit-note'; }
+  callFn('submit', { discord_id: STATE.user.id, username: STATE.user.username, text: val })
+    .then(function (res) {
+      // server moderation rejected it — let them rewrite, don't lock the round
+      if (res && res.blocked) {
+        input.disabled = false;
+        if (btn) btn.disabled = false;
+        input.focus(); input.select();
+        if (note) { note.textContent = '🚫 ' + (res.reason || "That can't be submitted."); note.className = 'submit-note blocked'; }
+      }
+    })
+    .catch(function (e) {
+      input.disabled = false;
+      if (btn) btn.disabled = false;
+      if (note) { note.textContent = '⚠ ' + e.message; note.className = 'submit-note blocked'; }
+    });
 }
 
 function renderVoting() {
@@ -374,14 +396,20 @@ function renderVoting() {
 
   var cards = STATE.submissions.map(function (s) {
     var isMine = s.discord_id === STATE.user.id;
+    if (s.hidden) return '<div class="sub-card2 removed"><div class="sub-text">🚫 removed by the table</div></div>';
     var tags = '';
     if (myCrown && myCrown.submission_id === s.id) tags += '<span class="my-tag">👑 ' + escapeHtml((STATE.awardsByKey[myCrown.award_key] || {}).label || '') + '</span>';
     if (myRead && myRead.submission_id === s.id) tags += '<span class="my-tag">🏷️ ' + escapeHtml((STATE.awardsByKey[myRead.award_key] || {}).label || '') + '</span>';
+    var iReported = STATE.reports.some(function (r) { return r.submission_id === s.id && r.reporter === STATE.user.id; });
+    var reportBtn = isMine ? ''
+      : (iReported ? '<span class="reported">🚩 flagged</span>'
+                   : '<button class="report-btn" data-sub="' + s.id + '" title="report hate / slurs">🚩</button>');
     var actions = '<div class="sub-actions">' +
       (isMine
         ? '<span class="muted">your prompt</span>'
         : '<button class="crown-btn" data-sub="' + s.id + '"' + (myCrown ? ' disabled' : '') + '>👑 crown</button>') +
       '<button class="read-btn" data-sub="' + s.id + '"' + (myRead ? ' disabled' : '') + '>🏷️ read</button>' +
+      reportBtn +
       '</div>';
     return '<div class="sub-card2"><div class="sub-text">&gt; ' + escapeHtml(s.text) + '</div>' + tags + actions + '</div>';
   }).join('');
@@ -405,6 +433,12 @@ function renderVoting() {
   Array.prototype.forEach.call(document.querySelectorAll('.read-btn'), function (b) {
     b.addEventListener('click', function () {
       callFn('tagvote', { voter_discord_id: STATE.user.id, submission_id: b.getAttribute('data-sub'), award_key: el('read-sel').value, slot: 'read' });
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.report-btn'), function (b) {
+    b.addEventListener('click', function () {
+      b.disabled = true; b.textContent = '🚩…';
+      callFn('report', { reporter: STATE.user.id, submission_id: b.getAttribute('data-sub') });
     });
   });
   el('skip-btn').addEventListener('click', function () { callFn('skip', {}); });
@@ -447,6 +481,7 @@ function renderResolving() {
   var top = rows.length ? scoreOf(rows[0]) : 0;
 
   var html = rows.map(function (s) {
+    if (s.hidden) return '<div class="result-row removed"><span class="who">' + escapeHtml(s.username) + '</span> <span class="muted">🚫 removed by the table</span></div>';
     var grants = STATE.roundGrants.filter(function (g) { return g.recipient === s.discord_id; });
     var isMine = s.discord_id === STATE.user.id;
     var chips = grants.map(function (g) {

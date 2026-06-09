@@ -381,6 +381,18 @@ button.ghost:hover { background: rgba(31, 156, 67, 0.12); }
 .dv-over { border-color: #ff5c5c; color: #ff5c5c; }
 .dv-over:hover { background: rgba(255,92,92,0.12); }
 
+/* content moderation */
+.submit-note { min-height: 16px; margin-top: 6px; font-size: 13px; }
+.submit-note.blocked { color: #ff5c5c; text-shadow: 0 0 5px rgba(255,92,92,0.4); }
+.report-btn {
+  font-size: 12px; padding: 4px 9px; margin-left: auto;
+  border-color: var(--phosphor-dim); color: var(--phosphor-dim);
+}
+.report-btn:hover { border-color: #ff5c5c; color: #ff5c5c; }
+.reported { margin-left: auto; font-size: 12px; color: #ff5c5c; }
+.sub-card2.removed, .result-row.removed { opacity: 0.55; border-style: dashed; }
+.sub-card2.removed .sub-text { color: #ff5c5c; }
+
 .champion {
   font-family: 'VT323', monospace;
   font-size: 26px;
