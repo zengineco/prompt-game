@@ -1,7 +1,7 @@
 // ============================================================
-// PROMPT (Reverse Mode) — Discord Activity client v0.2.0 (live multiplayer)
+// PROMPT — Discord Activity client v0.2.0 (live multiplayer)
 // Discord OAuth (real usernames) + Supabase realtime (shared game state)
-// Zengine™ | www.zengine.site
+// f-keys.com
 // ============================================================
 //
 // WORKFLOW STACK:
@@ -148,7 +148,7 @@ function fxFlash() {
 function boot() {
   try {
     var lines = [
-      'ZENGINE TERMINAL v2.1 — display online',
+      'F-KEYS TERMINAL v2.1 — display online',
       'loading deck ............ OK',
       'establishing reverse-prompt link ............',
       ''
@@ -715,7 +715,7 @@ function buildShareCard() {
   x.strokeStyle = DIM; x.lineWidth = 4; x.strokeRect(26, 26, W - 52, H - 52);
 
   x.fillStyle = GREEN; x.font = "52px 'VT323', monospace";
-  x.fillText('PROMPT // REVERSE MODE', 64, 122);
+  x.fillText('PROMPT', 64, 122);
   x.strokeStyle = GREEN; x.lineWidth = 3; x.strokeRect(W - 152, 70, 86, 64);
   x.font = "44px 'VT323', monospace"; x.fillText('ZG', W - 136, 118);
   x.strokeStyle = DIM; x.lineWidth = 2; x.beginPath(); x.moveTo(64, 156); x.lineTo(W - 64, 156); x.stroke();
@@ -735,7 +735,7 @@ function buildShareCard() {
   if (champ) { x.fillStyle = GREEN; x.font = "46px 'VT323', monospace"; x.fillText('🏆 CHAMPION: ' + champ.username, 64, H - 150); }
   x.strokeStyle = DIM; x.lineWidth = 2; x.beginPath(); x.moveTo(64, H - 112); x.lineTo(W - 64, H - 112); x.stroke();
   x.fillStyle = GREEN; x.font = "40px 'VT323', monospace"; x.fillText('PLAY IT → prompt.f-keys.com', 64, H - 62);
-  x.fillStyle = DIM; x.font = "26px 'Share Tech Mono', monospace"; x.textAlign = 'right'; x.fillText('ZENGINE™', W - 64, H - 62); x.textAlign = 'left';
+  x.fillStyle = DIM; x.font = "26px 'Share Tech Mono', monospace"; x.textAlign = 'right'; x.fillText('F-KEYS', W - 64, H - 62); x.textAlign = 'left';
   return cv;
 }
 async function makeShareCard() {
