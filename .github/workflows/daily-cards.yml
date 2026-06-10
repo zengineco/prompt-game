@@ -9,26 +9,41 @@ name: Daily Cards
 on:
   schedule:
     - cron: '0 9 * * *'   # 09:00 UTC daily
-  workflow_dispatch:       # also lets you click "Run workflow" manually anytime
+  workflow_dispatch:       # click "Run workflow" anytime; optionally target a category/count
+    inputs:
+      category:
+        description: 'Category to generate (blank = rotate by day)'
+        required: false
+        default: ''
+      count:
+        description: 'How many cards (1-30)'
+        required: false
+        default: '24'
 
 jobs:
   generate:
     runs-on: ubuntu-latest
     steps:
-      - name: Generate a fresh batch (rotating category)
+      - name: Generate a fresh batch
         env:
           FN_URL: https://ihclxurachkewtgnrldc.supabase.co/functions/v1/prompt-generate
           ANON: ${{ vars.VITE_SUPABASE_ANON_KEY }}
           ADMIN_TOKEN: ${{ secrets.PROMPT_ADMIN_TOKEN }}
+          IN_CAT: ${{ github.event.inputs.category }}
+          IN_COUNT: ${{ github.event.inputs.count }}
         run: |
           CATS=(legal hr incident existential aipanic doom unhinged relatable)
-          IDX=$(( $(date +%j) % 8 ))      # rotate category by day-of-year
-          CAT=${CATS[$IDX]}
-          echo "Generating 24 '$CAT' cards..."
+          CAT="$IN_CAT"
+          if [ -z "$CAT" ]; then
+            IDX=$(( $(date +%j) % 8 ))      # rotate category by day-of-year
+            CAT=${CATS[$IDX]}
+          fi
+          COUNT="${IN_COUNT:-24}"
+          echo "Generating $COUNT '$CAT' cards..."
           curl -sS -X POST "$FN_URL" \
             -H "Authorization: Bearer $ANON" \
             -H "Content-Type: application/json" \
-            -d "{\"admin_token\":\"$ADMIN_TOKEN\",\"category\":\"$CAT\",\"count\":24}" \
+            -d "{\"admin_token\":\"$ADMIN_TOKEN\",\"category\":\"$CAT\",\"count\":$COUNT}" \
             | tee /tmp/out.json
           echo
           grep -q '"ok":true' /tmp/out.json || { echo "::error::generation failed"; exit 1; }
