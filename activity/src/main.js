@@ -684,6 +684,83 @@ function scheduleAutoAdvance() {
   }, ms);
 }
 
+// ── Share card — the recruitment artifact. A green-CRT PNG of the best moment.
+function wrapText(ctx, text, x0, y0, maxW, lineH, maxLines) {
+  var words = String(text).split(/\s+/), line = '', yy = y0, lines = 0;
+  for (var i = 0; i < words.length; i++) {
+    var test = line ? line + ' ' + words[i] : words[i];
+    if (ctx.measureText(test).width > maxW && line) {
+      ctx.fillText(line, x0, yy); line = words[i]; yy += lineH; lines++;
+      if (maxLines && lines >= maxLines - 1) { /* let last line run */ }
+    } else line = test;
+  }
+  if (line) { ctx.fillText(line, x0, yy); yy += lineH; }
+  return yy;
+}
+// draws the card and returns the canvas element
+function buildShareCard() {
+  var W = 1080, H = 1080, GREEN = '#33ff66', DIM = '#1f9c43';
+  var cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  var x = cv.getContext('2d');
+  var byKey = STATE.awardsByKey;
+  function scoreOf(s) { return STATE.roundGrants.filter(function (g) { return g.recipient === s.discord_id; }).reduce(function (a, g) { return a + ((byKey[g.award_key] || {}).value || 0); }, 0); }
+  var champ = STATE.players.slice().sort(function (a, b) { return b.score - a.score; })[0];
+  var best = STATE.submissions.slice().filter(function (s) { return !s.hidden; }).sort(function (a, b) { return scoreOf(b) - scoreOf(a); })[0];
+  var answer = STATE.session.current_response || '';
+
+  x.fillStyle = '#050805'; x.fillRect(0, 0, W, H);
+  x.globalAlpha = 0.05; x.fillStyle = GREEN;
+  for (var sy = 0; sy < H; sy += 4) x.fillRect(0, sy, W, 1);
+  x.globalAlpha = 1;
+  x.strokeStyle = DIM; x.lineWidth = 4; x.strokeRect(26, 26, W - 52, H - 52);
+
+  x.fillStyle = GREEN; x.font = "52px 'VT323', monospace";
+  x.fillText('PROMPT // REVERSE MODE', 64, 122);
+  x.strokeStyle = GREEN; x.lineWidth = 3; x.strokeRect(W - 152, 70, 86, 64);
+  x.font = "44px 'VT323', monospace"; x.fillText('ZG', W - 136, 118);
+  x.strokeStyle = DIM; x.lineWidth = 2; x.beginPath(); x.moveTo(64, 156); x.lineTo(W - 64, 156); x.stroke();
+
+  var y = 240;
+  x.fillStyle = DIM; x.font = "30px 'Share Tech Mono', monospace"; x.fillText('THE AI SAID:', 64, y); y += 64;
+  x.fillStyle = GREEN; x.font = "54px 'VT323', monospace";
+  y = wrapText(x, '“' + answer + '”', 64, y, W - 128, 60) + 40;
+
+  if (best) {
+    x.fillStyle = DIM; x.font = "30px 'Share Tech Mono', monospace";
+    x.fillText('RECONSTRUCTED BY ' + String(best.username || '').toUpperCase() + ':', 64, y); y += 54;
+    x.fillStyle = GREEN; x.font = "36px 'Share Tech Mono', monospace";
+    y = wrapText(x, '> ' + best.text, 64, y, W - 128, 48);
+  }
+
+  if (champ) { x.fillStyle = GREEN; x.font = "46px 'VT323', monospace"; x.fillText('🏆 CHAMPION: ' + champ.username, 64, H - 150); }
+  x.strokeStyle = DIM; x.lineWidth = 2; x.beginPath(); x.moveTo(64, H - 112); x.lineTo(W - 64, H - 112); x.stroke();
+  x.fillStyle = GREEN; x.font = "40px 'VT323', monospace"; x.fillText('PLAY IT → prompt.f-keys.com', 64, H - 62);
+  x.fillStyle = DIM; x.font = "26px 'Share Tech Mono', monospace"; x.textAlign = 'right'; x.fillText('ZENGINE™', W - 64, H - 62); x.textAlign = 'left';
+  return cv;
+}
+async function makeShareCard() {
+  var btn = el('sharecard-btn'); if (!btn) return;
+  btn.disabled = true; btn.textContent = 'rendering…';
+  try {
+    if (document.fonts && document.fonts.ready) { try { await document.fonts.ready; } catch (e) {} }
+    var cv = buildShareCard();
+    var holder = el('share-holder'); holder.innerHTML = '';
+    cv.className = 'share-canvas'; holder.appendChild(cv);
+    var row = document.createElement('div'); row.className = 'row-actions';
+    var dl = document.createElement('a'); dl.href = cv.toDataURL('image/png'); dl.download = 'prompt-card.png'; dl.className = 'share-dl'; dl.textContent = '⬇ SAVE IMAGE';
+    row.appendChild(dl);
+    if (navigator.clipboard && window.ClipboardItem && cv.toBlob) {
+      var cp = document.createElement('button'); cp.className = 'ghost'; cp.textContent = '📋 COPY';
+      cp.addEventListener('click', function () { cv.toBlob(function (b) { try { navigator.clipboard.write([new ClipboardItem({ 'image/png': b })]).then(function () { cp.textContent = '✓ COPIED'; }, function () { cp.textContent = 'copy blocked'; }); } catch (e) { cp.textContent = 'copy blocked'; } }); });
+      row.appendChild(cp);
+    }
+    holder.appendChild(row);
+    var hint = document.createElement('div'); hint.className = 'muted'; hint.textContent = 'screenshot or save it — then drop it in a Discord that needs a game.';
+    holder.appendChild(hint);
+  } catch (e) { console.error('share card:', e); }
+  btn.disabled = false; btn.textContent = '📸 SHARE CARD';
+}
+
 function renderGameOver() {
   var sorted = STATE.players.slice().sort(function (a, b) { return b.score - a.score; });
   var champ = sorted[0];
@@ -703,10 +780,13 @@ function renderGameOver() {
     '</div>' +
     '<div class="results">' + standings + '</div>' +
     '<div class="row-actions"><button id="again-btn">▸ PLAY AGAIN</button>' +
-    '<button id="findgame-btn" class="ghost">🌐 FIND ANOTHER GAME</button></div>';
+    '<button id="findgame-btn" class="ghost">🌐 FIND ANOTHER GAME</button>' +
+    '<button id="sharecard-btn" class="ghost">📸 SHARE CARD</button></div>' +
+    '<div class="share-holder" id="share-holder"></div>';
 
   el('again-btn').addEventListener('click', function () { callFn('reset', {}); });
   el('findgame-btn').addEventListener('click', function () { findGame(el('findgame-btn')); });
+  el('sharecard-btn').addEventListener('click', makeShareCard);
 }
 
 function renderScoreboard() {

@@ -426,6 +426,15 @@ button.ghost:hover { background: rgba(31, 156, 67, 0.12); }
 .timer-secs { font-size: 14px; color: var(--phosphor); min-width: 38px; text-align: right; letter-spacing: 1px; }
 .award-pickers { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
 
+/* share card */
+.share-holder { margin-top: 16px; text-align: center; }
+.share-canvas { width: 100%; max-width: 340px; border: 1px solid var(--phosphor-dim); box-shadow: 0 0 14px rgba(51,255,102,0.18); }
+.share-dl {
+  display: inline-block; padding: 6px 16px; border: 1px solid var(--phosphor);
+  color: var(--phosphor); text-decoration: none; letter-spacing: 1px; font-size: 13px;
+}
+.share-dl:hover { background: rgba(51,255,102,0.12); }
+
 .champion {
   font-family: 'VT323', monospace;
   font-size: 26px;
