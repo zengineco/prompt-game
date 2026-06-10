@@ -59,6 +59,7 @@ var EMOJI = {
   shutout: '🧹', landslide: '🏔️', flawless: '💎', vindicated: '✊', overruled: '🔨', hanging_judge: '⚖️'
 };
 function awEmoji(k) { return EMOJI[k] || '🏷️'; }
+var BOT_ID = 'bot-prompt-ai';   // PROMPT_AI — the fake contestant
 
 // fake "decoding" fragments the terminal flickers while a player is still typing
 var SCRAMBLE_WORDS = [
@@ -98,7 +99,10 @@ var STATE = {
   channel: null,        // active realtime channel (so we can swap it when matchmaking)
   lbTab: 'global',      // leaderboard view: 'global' | 'friends'
   tick: null,           // countdown + scramble interval
-  crownVoters: {}       // discord_id -> true for players who've locked a crown this round
+  crownVoters: {},      // discord_id -> true for players who've locked a crown this round
+  revealRound: -1,      // staged results: which round's reveal has already played
+  revealStage: 0,       // 0 = vote counts, 1 = authors revealed, 2 = full awards + dispute
+  revealT1: null, revealT2: null
 };
 
 // ── Small helpers ──────────────────────────────────────────────────────────
@@ -589,64 +593,100 @@ function renderVoting() {
 
 function renderResolving() {
   var byKey = STATE.awardsByKey;
-  function scoreOf(sub) {
-    return STATE.roundGrants.filter(function (g) { return g.recipient === sub.discord_id; })
-      .reduce(function (a, g) { return a + ((byKey[g.award_key] || {}).value || 0); }, 0);
+  var r = STATE.session.round;
+  // play the staged reveal ONCE per round: counts → authors → full awards
+  if (STATE.revealRound !== r) {
+    STATE.revealRound = r; STATE.revealStage = 0;
+    if (STATE.revealT1) clearTimeout(STATE.revealT1);
+    if (STATE.revealT2) clearTimeout(STATE.revealT2);
+    STATE.revealT1 = setTimeout(function () { if (STATE.revealStage < 1) STATE.revealStage = 1; if (STATE.session && STATE.session.phase === 'resolving') render(); }, 2400);
+    STATE.revealT2 = setTimeout(function () { if (STATE.revealStage < 2) STATE.revealStage = 2; if (STATE.session && STATE.session.phase === 'resolving') render(); }, 4200);
   }
+  var stage = STATE.revealStage || 0;
+  if (STATE.disputes.length) stage = 2; // a dispute means the reveal already finished
+
+  function scoreOf(sub) { return STATE.roundGrants.filter(function (g) { return g.recipient === sub.discord_id; }).reduce(function (a, g) { return a + ((byKey[g.award_key] || {}).value || 0); }, 0); }
+  function crownsOf(sub) { return STATE.roundGrants.filter(function (g) { return g.recipient === sub.discord_id && g.granted_by !== 'referee' && (byKey[g.award_key] || {}).valence === 'crown'; }).length; }
   function nameOf(id) { var p = STATE.players.find(function (x) { return x.id === id; }); return p ? p.username : id; }
 
-  var myDispute = STATE.disputes.find(function (d) { return d.disputer === STATE.user.id; });
-  var openDisputes = STATE.disputes.filter(function (d) { return d.status === 'open'; });
+  var subs = STATE.submissions.slice().filter(function (s) { return !s.hidden; });
+  var sorted = subs.slice().sort(function (a, b) { return scoreOf(b) - scoreOf(a); });
+  var top = sorted.length ? scoreOf(sorted[0]) : 0;
+  var botWon = sorted.length > 0 && sorted[0].discord_id === BOT_ID && top > 0;
+  var LET = 'ABCDEFGH';
 
-  // open dispute → table votes uphold/overturn
-  var disputeHtml = openDisputes.map(function (d) {
-    var votes = STATE.disputeVotes.filter(function (v) { return v.dispute_id === d.id; });
-    var up = votes.filter(function (v) { return v.uphold; }).length;
-    var over = votes.length - up;
-    var amDisputer = d.disputer === STATE.user.id;
-    var iVoted = votes.some(function (v) { return v.voter === STATE.user.id; });
-    var awardLabel = (byKey[d.award_key] || {}).label || d.award_key;
-    var ctrl = (amDisputer || iVoted)
-      ? '<span class="muted">' + (amDisputer ? 'awaiting the verdict...' : 'voted') + '</span>'
-      : '<button class="dv-up" data-d="' + d.id + '">UPHOLD</button> <button class="dv-over" data-d="' + d.id + '">OVERTURN</button>';
-    return '<div class="panel dispute-panel"><div class="label">⚖️ DISPUTE</div>' +
-      '<div class="sub-text"><b>' + escapeHtml(nameOf(d.disputer)) + '</b> contests <span class="award-chip">' + escapeHtml(awardLabel) + '</span> — does it stick?</div>' +
-      '<div class="row-actions">' + ctrl + '</div>' +
-      '<div class="muted">uphold ' + up + ' · overturn ' + over + '</div></div>';
-  }).join('');
+  var head =
+    '<div class="panel"><div class="label">&gt;&gt; Round ' + STATE.session.round + ' — Results</div>' +
+    '<div class="transmission-small">"' + escapeHtml(STATE.session.current_response) + '"</div></div>';
 
-  var resolvedHtml = STATE.disputes.filter(function (d) { return d.status !== 'open'; }).map(function (d) {
-    var awardLabel = (byKey[d.award_key] || {}).label || d.award_key;
-    return '<div class="muted">⚖️ ' + escapeHtml(awardLabel) + (d.status === 'overturned' ? ' — STRUCK by the table' : ' — UPHELD') + '</div>';
-  }).join('');
+  var bodyHtml;
+  if (stage === 0) {
+    // STAGE 1: vote counts only, authors hidden
+    bodyHtml = '<div class="panel"><div class="label">TALLYING THE VOTES…</div>' +
+      sorted.map(function (s, i) {
+        var c = crownsOf(s);
+        return '<div class="result-row"><span class="who">PROMPT ' + LET[i] + '</span> <span class="muted">…… ' + c + (c === 1 ? ' crown' : ' crowns') + '</span></div>';
+      }).join('') + '</div>' +
+      '<div class="muted">…revealing the authors…</div>';
+  } else {
+    // STAGE 2/3: authors revealed; full awards + dispute only at stage 2
+    var myDispute = STATE.disputes.find(function (d) { return d.disputer === STATE.user.id; });
+    var hasIdentity = !!(STATE.myProfile && STATE.myProfile.calltag) || (STATE.myTitles && STATE.myTitles.length > 0);
+    var rowsHtml = sorted.map(function (s, i) {
+      var isMine = s.discord_id === STATE.user.id;
+      var isBot = s.discord_id === BOT_ID;
+      var win = (scoreOf(s) === top && top > 0) ? ' win' : '';
+      var who = '<span class="reveal-let">' + LET[i] + '</span> ' + escapeHtml(s.username) + (isBot ? ' <span class="bot-tag">🤖 BOT</span>' : '');
+      var awards = '';
+      if (stage >= 2) {
+        var grants = STATE.roundGrants.filter(function (g) { return g.recipient === s.discord_id; });
+        var chips = grants.map(function (g) {
+          var d = byKey[g.award_key] || {};
+          var canDispute = isMine && !isBot && !myDispute && hasIdentity; // disputes unlock at your first calltag
+          var dbtn = canDispute ? ' <button class="dispute-btn" data-grant="' + g.id + '" title="dispute this tag">⚖️</button>' : '';
+          return '<span class="award-chip rarity-' + escapeHtml(g.rarity) + '">' + awEmoji(g.award_key) + ' ' + escapeHtml(d.label || g.award_key) + '</span>' + dbtn;
+        }).join(' ');
+        awards = chips ? '<div class="award-row">' + chips + '</div>' : '<div class="muted">— no awards —</div>';
+      }
+      return '<div class="result-row' + win + (isBot ? ' botrow' : '') + '"><span class="who">' + who + '</span> ' +
+        (win ? '🏆 ' : '') + '<span class="muted">(' + scoreOf(s) + ')</span>' +
+        '<div class="sub-text">&gt; ' + escapeHtml(s.text) + '</div>' + awards + '</div>';
+    }).join('');
+    var roast = botWon ? '<div class="panel roast"><div class="label">🤖 PROMPT_AI FOOLED THE ROOM</div><div class="sub-text">the machine out-guessed every human. nobody scores this round.</div></div>' : '';
+    bodyHtml = roast + '<div class="results">' + rowsHtml + '</div>';
+  }
 
-  var rows = STATE.submissions.slice().sort(function (a, b) { return scoreOf(b) - scoreOf(a); });
-  var top = rows.length ? scoreOf(rows[0]) : 0;
-
-  var html = rows.map(function (s) {
-    if (s.hidden) return '<div class="result-row removed"><span class="who">' + escapeHtml(s.username) + '</span> <span class="muted">🚫 removed by the table</span></div>';
-    var grants = STATE.roundGrants.filter(function (g) { return g.recipient === s.discord_id; });
-    var isMine = s.discord_id === STATE.user.id;
-    var chips = grants.map(function (g) {
-      var d = byKey[g.award_key] || {};
-      var canDispute = isMine && !myDispute;
-      var dbtn = canDispute ? ' <button class="dispute-btn" data-grant="' + g.id + '" title="dispute this tag">⚖️</button>' : '';
-      return '<span class="award-chip rarity-' + escapeHtml(g.rarity) + '">' + escapeHtml(d.label || g.award_key) + '</span>' + dbtn;
-    }).join(' ');
-    var win = (scoreOf(s) === top && top > 0) ? ' win' : '';
-    return '<div class="result-row' + win + '"><span class="who">' + escapeHtml(s.username) + '</span> ' +
-      (win ? '🏆 ' : '') + '<span class="muted">(' + scoreOf(s) + ')</span>' +
-      '<div class="sub-text">&gt; ' + escapeHtml(s.text) + '</div>' +
-      (chips ? '<div class="award-row">' + chips + '</div>' : '<div class="muted">— no awards —</div>') +
-      '</div>';
-  }).join('');
+  // dispute UI only once the table is fully revealed
+  var disputeHtml = '', resolvedHtml = '', openDisputes = [];
+  if (stage >= 2) {
+    openDisputes = STATE.disputes.filter(function (d) { return d.status === 'open'; });
+    disputeHtml = openDisputes.map(function (d) {
+      var votes = STATE.disputeVotes.filter(function (v) { return v.dispute_id === d.id; });
+      var up = votes.filter(function (v) { return v.uphold; }).length;
+      var over = votes.length - up;
+      var amDisputer = d.disputer === STATE.user.id;
+      var iVoted = votes.some(function (v) { return v.voter === STATE.user.id; });
+      var awardLabel = (byKey[d.award_key] || {}).label || d.award_key;
+      var ctrl = (amDisputer || iVoted)
+        ? '<span class="muted">' + (amDisputer ? 'awaiting the verdict...' : 'voted') + '</span>'
+        : '<button class="dv-up" data-d="' + d.id + '">UPHOLD</button> <button class="dv-over" data-d="' + d.id + '">OVERTURN</button>';
+      return '<div class="panel dispute-panel"><div class="label">⚖️ DISPUTE</div>' +
+        '<div class="sub-text"><b>' + escapeHtml(nameOf(d.disputer)) + '</b> contests <span class="award-chip">' + escapeHtml(awardLabel) + '</span> — does it stick?</div>' +
+        '<div class="row-actions">' + ctrl + '</div>' +
+        '<div class="muted">uphold ' + up + ' · overturn ' + over + '</div></div>';
+    }).join('');
+    resolvedHtml = STATE.disputes.filter(function (d) { return d.status !== 'open'; }).map(function (d) {
+      var awardLabel = (byKey[d.award_key] || {}).label || d.award_key;
+      return '<div class="muted">⚖️ ' + escapeHtml(awardLabel) + (d.status === 'overturned' ? ' — STRUCK by the table' : ' — UPHELD') + '</div>';
+    }).join('');
+  }
 
   el('game').innerHTML =
-    '<div class="panel"><div class="label">&gt;&gt; Round ' + STATE.session.round + ' — Awards</div>' +
-    '<div class="transmission-small">"' + escapeHtml(STATE.session.current_response) + '"</div></div>' +
+    head +
     disputeHtml + (resolvedHtml ? '<div class="results">' + resolvedHtml + '</div>' : '') +
-    '<div class="results">' + html + '</div>' +
-    '<div class="row-actions"><button id="next-btn"' + (openDisputes.length ? ' disabled' : '') + '>NEXT ROUND ▸</button></div>';
+    bodyHtml +
+    timerBarHtml() +
+    (stage >= 2 ? '<div class="row-actions"><button id="next-btn"' + (openDisputes.length ? ' disabled' : '') + '>NEXT ROUND ▸</button></div>' : '');
 
   Array.prototype.forEach.call(document.querySelectorAll('.dispute-btn'), function (b) {
     b.addEventListener('click', function () { callFn('dispute', { grant_id: b.getAttribute('data-grant'), disputer: STATE.user.id }); });
