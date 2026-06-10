@@ -130,7 +130,7 @@ function fxFlash() {
 function boot() {
   try {
     var lines = [
-      'ZENGINE TERMINAL v2.1 — phosphor display online',
+      'ZENGINE TERMINAL v2.1 — display online',
       'loading deck ............ OK',
       'establishing reverse-prompt link ............',
       ''
@@ -401,13 +401,13 @@ function renderResponding() {
 
   var input = did
     ? '<div class="muted">✅ prompt locked in — waiting (' + doneCount + '/' + total + ')</div>'
-    : '<div class="input-row"><input id="guess" type="text" maxlength="160" placeholder="what did someone ask..." autocomplete="off" />' +
-      '<button id="submit-btn">TRANSMIT</button></div><div class="submit-note" id="submit-note"></div>';
+    : '<div class="input-row"><input id="guess" type="text" maxlength="160" placeholder="what you&#39;d ask him…" autocomplete="off" />' +
+      '<button id="submit-btn">SEND IT</button></div><div class="submit-note" id="submit-note"></div>';
 
   el('game').innerHTML =
-    '<div class="panel"><div class="label">&gt;&gt; Recovered AI Transmission — Round ' + STATE.session.round + '</div>' +
+    '<div class="panel"><div class="label">&gt;&gt; THE AI SAID — Round ' + STATE.session.round + '</div>' +
     '<div class="transmission" id="transmission"></div></div>' +
-    '<div class="prompt-line"><span class="arrow">&gt;</span> RECONSTRUCT THE PROMPT THAT CAUSED IT:</div>' +
+    '<div class="prompt-line"><span class="arrow">&gt;</span> HERE — JUST TYPE WHAT MAKES HIM SAY THAT:</div>' +
     input +
     '<div class="roster">' + checks + '</div>' +
     '<div class="row-actions"><button id="skip-btn" class="ghost">force vote ▸</button></div>';
