@@ -51,6 +51,22 @@ var CATEGORIES = [
   { key: 'relatable', label: 'Relatable' }
 ];
 
+// award_key -> emoji, so the voting picker + chips read at a glance
+var EMOJI = {
+  dead_on: '🎯', chefs_kiss: '🤌', blursed: '🌀',
+  actually: '🤓', too_real: '😭', unhinged: '🤪', wellness: '🩺', hr_flagged: '💼', bozo: '🤡',
+  self_report: '🫣', word_salad: '🥗', get_carried: '⚓',
+  shutout: '🧹', landslide: '🏔️', flawless: '💎', vindicated: '✊', overruled: '🔨', hanging_judge: '⚖️'
+};
+function awEmoji(k) { return EMOJI[k] || '🏷️'; }
+
+// fake "decoding" fragments the terminal flickers while a player is still typing
+var SCRAMBLE_WORDS = [
+  'manifest parking spot', 'is it illegal to', 'asking for a friend', 'how do i explain this',
+  'can my landlord legally', 'what does it mean when he', 'undo a sent text', 'define situationship',
+  'reverse a paternity test', 'my search history', 'is it weird that i', 'how long until they notice'
+];
+
 // ── STATE — all mutable client state lives here ────────────────────────────
 var STATE = {
   sdk: null,
@@ -80,7 +96,9 @@ var STATE = {
   reports: [],          // content reports this round (who flagged what)
   homeInstanceId: null, // the friends/guest room to return to after a public game
   channel: null,        // active realtime channel (so we can swap it when matchmaking)
-  lbTab: 'global'       // leaderboard view: 'global' | 'friends'
+  lbTab: 'global',      // leaderboard view: 'global' | 'friends'
+  tick: null,           // countdown + scramble interval
+  crownVoters: {}       // discord_id -> true for players who've locked a crown this round
 };
 
 // ── Small helpers ──────────────────────────────────────────────────────────
@@ -313,6 +331,8 @@ async function refresh() {
     STATE.myTags = mt.data || [];
     var rp = await sb.from('prompt_reports').select('submission_id,reporter').eq('session_id', STATE.sessionId).eq('round', round);
     STATE.reports = rp.data || [];
+    var av = await sb.from('prompt_tag_votes').select('voter,slot').eq('session_id', STATE.sessionId).eq('round', round).eq('slot', 'crown');
+    STATE.crownVoters = {}; (av.data || []).forEach(function (v) { STATE.crownVoters[v.voter] = true; });
     render();
   } catch (err) { console.error('refresh:', err); }
 }
@@ -334,6 +354,7 @@ function render() {
   else el('game').innerHTML = '<div class="muted">connecting...</div>';
   renderScoreboard();
   scheduleAutoAdvance();
+  startTick();
 }
 
 function renderLobby() {
@@ -390,14 +411,74 @@ function renderPublicWaiting() {
   wireLeaderboardTabs();
 }
 
+// ── Living-terminal pieces — the table explains its own state ───────────────
+function pad2(n) { return (n < 10 ? '0' : '') + n; }
+function deckLabel() {
+  var c = CATEGORIES.find(function (x) { return x.key === STATE.session.category; });
+  return (c ? c.label : (STATE.session.category || 'Mixed')).toUpperCase();
+}
+// the ROUND / DECK / recovered-response header used by responding + voting
+function termHeadHtml(label, typed) {
+  var body = typed
+    ? '<div class="transmission" id="transmission"></div>'
+    : '<div class="transmission-small">"' + escapeHtml(STATE.session.current_response || '') + '"</div>';
+  return '<div class="panel term-head">' +
+    '<div class="term-top">ROUND ' + pad2(STATE.session.round) + ' &nbsp;·&nbsp; DECK: ' + escapeHtml(deckLabel()) + '</div>' +
+    '<div class="label">' + label + '</div>' + body + '</div>';
+}
+// per-player status so nobody asks "are we waiting on someone?"
+function playersPanelHtml(mode) {
+  var rows = STATE.players.map(function (p) {
+    var me = p.id === STATE.user.id;
+    var statusCell;
+    if (mode === 'voting') {
+      var voted = STATE.crownVoters[p.id] || STATE.crownVoters[p.discord_id];
+      statusCell = voted ? '<span class="pstatus on">[LOCKED IN]</span>'
+                         : '<span class="pstatus wait">DECIDING…</span>';
+    } else {
+      var done = STATE.submissions.some(function (s) { return (s.discord_id === p.id || s.discord_id === p.discord_id) && !s.hidden; });
+      statusCell = done ? '<span class="pstatus on">[SUBMITTED]</span>'
+                        : '<span class="pstatus wait">RECONSTRUCTING <span class="scramble">…</span></span>';
+    }
+    return '<div class="prow"><span class="pname">&#9658; ' + escapeHtml(p.username) +
+      (me ? ' <span class="me">(you)</span>' : '') + '</span>' + statusCell + '</div>';
+  }).join('');
+  return '<div class="panel players-panel"><div class="label">PLAYERS</div>' + rows + '</div>';
+}
+function timerBarHtml() {
+  if (!STATE.session || !STATE.session.deadline) return '';
+  return '<div class="timer"><div class="timer-track"><div class="timer-fill" id="timer-fill"></div></div>' +
+    '<span class="timer-secs" id="timer-secs">—</span></div>';
+}
+// one interval drives the countdown bar AND the scramble "decoding" flicker
+function tickAll() {
+  var s = STATE.session;
+  var secsEl = el('timer-secs');
+  if (secsEl && s && s.deadline) {
+    var rem = Math.max(0, Math.ceil((new Date(s.deadline).getTime() - Date.now()) / 1000));
+    secsEl.textContent = rem + 's';
+    var total = s.phase === 'voting' ? 50 : (s.phase === 'resolving' ? 12 : 75);
+    var fill = el('timer-fill');
+    if (fill) { fill.style.width = Math.max(0, Math.min(100, (rem / total) * 100)) + '%'; fill.className = 'timer-fill' + (rem <= 8 ? ' low' : ''); }
+  }
+  var sc = document.querySelectorAll('.scramble');
+  if (sc.length) {
+    var g = SCRAMBLE_WORDS[Math.floor(Math.random() * SCRAMBLE_WORDS.length)];
+    var cut = g.slice(0, 4 + Math.floor(Math.random() * Math.max(1, g.length - 4)));
+    Array.prototype.forEach.call(sc, function (n) { n.textContent = cut; });
+  }
+}
+function startTick() {
+  if (STATE.tick) { clearInterval(STATE.tick); STATE.tick = null; }
+  if (!el('timer-secs') && !document.querySelector('.scramble')) return;
+  tickAll();
+  STATE.tick = setInterval(tickAll, 140);
+}
+
 function renderResponding() {
   var did = mine(STATE.submissions, 'discord_id');
   var doneCount = STATE.submissions.length;
   var total = STATE.players.length;
-  var checks = STATE.players.map(function (p) {
-    var ok = STATE.submissions.some(function (s) { return s.discord_id === p.id || s.discord_id === p.discord_id; });
-    return '<div class="chip">' + (ok ? '✅' : '⏳') + ' ' + escapeHtml(p.username) + '</div>';
-  }).join('');
 
   var input = did
     ? '<div class="muted">✅ prompt locked in — waiting (' + doneCount + '/' + total + ')</div>'
@@ -405,11 +486,11 @@ function renderResponding() {
       '<button id="submit-btn">SEND IT</button></div><div class="submit-note" id="submit-note"></div>';
 
   el('game').innerHTML =
-    '<div class="panel"><div class="label">&gt;&gt; THE AI SAID — Round ' + STATE.session.round + '</div>' +
-    '<div class="transmission" id="transmission"></div></div>' +
+    termHeadHtml('&gt;&gt; THE AI SAID', true) +
     '<div class="prompt-line"><span class="arrow">&gt;</span> HERE — JUST TYPE WHAT MAKES HIM SAY THAT:</div>' +
     input +
-    '<div class="roster">' + checks + '</div>' +
+    playersPanelHtml('responding') +
+    timerBarHtml() +
     '<div class="row-actions"><button id="skip-btn" class="ghost">force vote ▸</button></div>';
 
   paintTransmission();
@@ -452,8 +533,8 @@ function renderVoting() {
   var myCrown = STATE.myTags.find(function (t) { return t.slot === 'crown'; });
   var myRead = STATE.myTags.find(function (t) { return t.slot === 'read'; });
 
-  var crownOpts = crowns.map(function (a) { return '<option value="' + a.key + '">' + escapeHtml(a.label) + '</option>'; }).join('');
-  var readOpts = reads.map(function (a) { return '<option value="' + a.key + '">' + escapeHtml(a.label) + '</option>'; }).join('');
+  function opts(list) { return list.map(function (a) { return '<option value="' + a.key + '">' + awEmoji(a.key) + ' ' + escapeHtml(a.label) + '</option>'; }).join(''); }
+  var crownOpts = opts(crowns), readOpts = opts(reads);
 
   var cards = STATE.submissions.map(function (s) {
     var isMine = s.discord_id === STATE.user.id;
@@ -478,12 +559,13 @@ function renderVoting() {
   var status = (myCrown ? '👑 crown cast' : '👑 crown REQUIRED') + ' &nbsp;·&nbsp; ' + (myRead ? '🏷️ read cast' : '🏷️ read optional');
 
   el('game').innerHTML =
-    '<div class="panel"><div class="label">&gt;&gt; The AI answered</div>' +
-    '<div class="transmission-small">"' + escapeHtml(STATE.session.current_response) + '"</div></div>' +
-    '<div class="prompt-line"><span class="arrow">&gt;</span> CROWN the best reconstruction, then optionally drop a READ:</div>' +
-    '<div class="award-pickers">CROWN <select id="crown-sel">' + crownOpts + '</select> &nbsp; READ <select id="read-sel">' + readOpts + '</select></div>' +
+    termHeadHtml('&gt;&gt; THE AI ANSWERED — crown the prompt that nailed it', false) +
+    '<div class="prompt-line"><span class="arrow">&gt;</span> 👑 CROWN the best, then optionally 🏷️ READ one:</div>' +
+    '<div class="award-pickers">👑 <select id="crown-sel">' + crownOpts + '</select> &nbsp; 🏷️ <select id="read-sel">' + readOpts + '</select></div>' +
     '<div class="subs">' + cards + '</div>' +
     '<div class="muted">' + status + '</div>' +
+    playersPanelHtml('voting') +
+    timerBarHtml() +
     '<div class="row-actions"><button id="skip-btn" class="ghost">force results ▸</button></div>';
 
   Array.prototype.forEach.call(document.querySelectorAll('.crown-btn'), function (b) {

@@ -404,6 +404,28 @@ button.ghost:hover { background: rgba(31, 156, 67, 0.12); }
   box-shadow: inset 0 0 8px rgba(51,255,102,0.14);
 }
 
+/* ── living terminal ─────────────────────────────────────── */
+.term-top { font-size: 12px; letter-spacing: 2px; color: var(--phosphor-dim); margin-bottom: 6px; }
+.players-panel { margin-top: 12px; }
+.prow {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 2px; border-bottom: 1px dashed rgba(31,156,67,0.25); font-size: 14px;
+}
+.prow:last-child { border-bottom: 0; }
+.pname { color: var(--phosphor); letter-spacing: 1px; }
+.pname .me { color: var(--phosphor-dim); font-size: 11px; }
+.pstatus { font-size: 12px; letter-spacing: 1px; white-space: nowrap; }
+.pstatus.on { color: var(--phosphor); text-shadow: 0 0 5px rgba(51,255,102,0.4); }
+.pstatus.wait { color: var(--phosphor-dim); animation: ppulse 1.3s ease-in-out infinite; }
+.scramble { color: var(--phosphor-dim); font-style: italic; }
+@keyframes ppulse { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+.timer { display: flex; align-items: center; gap: 10px; margin: 12px 0 4px; }
+.timer-track { flex: 1; height: 10px; border: 1px solid var(--phosphor-dim); background: rgba(0,0,0,0.35); }
+.timer-fill { height: 100%; width: 100%; background: var(--phosphor); box-shadow: 0 0 6px var(--phosphor); transition: width .2s linear; }
+.timer-fill.low { background: #ff5c5c; box-shadow: 0 0 6px #ff5c5c; }
+.timer-secs { font-size: 14px; color: var(--phosphor); min-width: 38px; text-align: right; letter-spacing: 1px; }
+.award-pickers { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+
 .champion {
   font-family: 'VT323', monospace;
   font-size: 26px;
