@@ -56,7 +56,8 @@ var EMOJI = {
   dead_on: '🎯', chefs_kiss: '🤌', blursed: '🌀',
   actually: '🤓', too_real: '😭', unhinged: '🤪', wellness: '🩺', hr_flagged: '💼', bozo: '🤡',
   self_report: '🫣', word_salad: '🥗', get_carried: '⚓',
-  shutout: '🧹', landslide: '🏔️', flawless: '💎', vindicated: '✊', overruled: '🔨', hanging_judge: '⚖️'
+  shutout: '🧹', landslide: '🏔️', flawless: '💎', vindicated: '✊', overruled: '🔨', hanging_judge: '⚖️',
+  bot_bait: '🎣'
 };
 function awEmoji(k) { return EMOJI[k] || '🏷️'; }
 var BOT_ID = 'bot-prompt-ai';   // PROMPT_AI — the fake contestant
@@ -842,8 +843,10 @@ function renderScoreboard() {
   var mine = '';
   if (STATE.myProfile) {
     var tag = STATE.myProfile.calltag ? ' · <b>' + escapeHtml(STATE.myProfile.calltag) + '</b>' : '';
+    var fooled = STATE.myProfile.bot_crowns || 0;
+    var foolStr = fooled > 0 ? ' · <span class="fooled">🤖 fooled ' + fooled + '×</span>' : '';
     mine = '<div class="my-rank">RANK: <b>' + escapeHtml(STATE.myProfile.rank || 'UNRANKED') + '</b>' + tag +
-      ' · ' + (STATE.myProfile.prestige || 0) + ' prestige</div>';
+      ' · ' + (STATE.myProfile.prestige || 0) + ' prestige' + foolStr + '</div>';
   }
   el('scoreboard').innerHTML = (board ? '<div class="label">SCOREBOARD</div>' + board : '') + mine;
 }
@@ -863,9 +866,10 @@ function leaderboardHtml() {
   }
   var body = rows.map(function (p, i) {
     var medal = ['🥇', '🥈', '🥉'][i] || (i + 1) + '.';
+    var isBot = p.username === 'PROMPT_AI';
     var sig = p.calltag ? ' <span class="title-tag">' + escapeHtml(p.calltag) + '</span>' : '';
-    return '<div class="lb-row">' + medal + ' <span class="who">' + escapeHtml(p.username) + '</span>' + sig +
-      ' · ' + (p.prestige || 0) + 'p</div>';
+    return '<div class="lb-row' + (isBot ? ' botrow' : '') + '">' + medal + ' ' + (isBot ? '🤖 ' : '') +
+      '<span class="who">' + escapeHtml(p.username) + '</span>' + sig + ' · ' + (p.prestige || 0) + 'p</div>';
   }).join('') || '<div class="muted">no rankings yet — play a game</div>';
   var tabs = '<div class="lb-tabs">' +
     '<button class="lb-tab' + (tab === 'global' ? ' on' : '') + '" data-tab="global">🌐 GLOBAL</button>' +
