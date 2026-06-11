@@ -2,9 +2,14 @@
 # PROMPT — Daily card generation (NEW CUES DAILY)
 # Fires prompt-generate once a day on a rotating category → pending queue.
 # Cards land as source='ai', approved=false (Claude/Vince curates before they go live).
-# Zengine™ | www.zengine.site
+# f-keys.com
 # ============================================================
 name: Daily Cards
+
+# Future-proof JS actions onto Node 24 (Node 20 deprecated 2026-06-16). This job is
+# pure bash today, but harmless + consistent with deploy-activity.yml.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 on:
   schedule:
