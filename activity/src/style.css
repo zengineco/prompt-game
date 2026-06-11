@@ -443,6 +443,7 @@ button.ghost:hover { background: rgba(31, 156, 67, 0.12); }
 .botrow { border-left-color: #c061ff; }
 .lb-row.botrow .who { color: #c061ff; text-shadow: 0 0 5px rgba(192,97,255,0.5); }
 .fooled { color: #c061ff; }
+.botchip { color: #c061ff; border-color: #c061ff; }
 
 .champion {
   font-family: 'VT323', monospace;

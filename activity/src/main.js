@@ -364,7 +364,7 @@ function render() {
 
 function renderLobby() {
   if (STATE.session.is_public) return renderPublicWaiting();
-  var roster = STATE.players.map(function (p) { return '<div class="chip">▸ ' + escapeHtml(p.username) + '</div>'; }).join('');
+  var roster = STATE.players.map(function (p) { return '<div class="chip">▸ ' + escapeHtml(p.username) + '</div>'; }).join('') + '<div class="chip botchip">🤖 PROMPT_AI</div>';
   var opts = CATEGORIES.map(function (c) {
     return '<option value="' + c.key + '"' + (c.key === STATE.category ? ' selected' : '') + '>' + c.label + '</option>';
   }).join('');
@@ -401,7 +401,7 @@ function renderPublicWaiting() {
   var roster = STATE.players.map(function (p) {
     var me = p.id === STATE.user.id ? ' (you)' : '';
     return '<div class="chip">▸ ' + escapeHtml(p.username) + me + '</div>';
-  }).join('');
+  }).join('') + '<div class="chip botchip">🤖 PROMPT_AI</div>';
   el('game').innerHTML =
     '<div class="panel"><div class="label">&gt;&gt; PUBLIC TABLE — matchmaking</div>' +
     '<div class="roster">' + (roster || '<span class="muted">you\'re first in...</span>') + '</div></div>' +
@@ -448,7 +448,12 @@ function playersPanelHtml(mode) {
     return '<div class="prow"><span class="pname">&#9658; ' + escapeHtml(p.username) +
       (me ? ' <span class="me">(you)</span>' : '') + '</span>' + statusCell + '</div>';
   }).join('');
-  return '<div class="panel players-panel"><div class="label">PLAYERS</div>' + rows + '</div>';
+  // PROMPT_AI is always at the table (joins its guess at vote time) — show it so it never feels absent
+  var botRow = '<div class="prow"><span class="pname">&#129302; PROMPT_AI <span class="bot-tag">BOT</span></span>' +
+    (mode === 'voting'
+      ? '<span class="pstatus on">[IN THE MIX]</span>'
+      : '<span class="pstatus wait">RECONSTRUCTING <span class="scramble">…</span></span>') + '</div>';
+  return '<div class="panel players-panel"><div class="label">PLAYERS</div>' + rows + botRow + '</div>';
 }
 function timerBarHtml() {
   if (!STATE.session || !STATE.session.deadline) return '';
