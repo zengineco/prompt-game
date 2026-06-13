@@ -713,7 +713,8 @@ function renderVoting() {
   var cards = subs.map(function (s, i) {
     var isMine = s.discord_id === STATE.user.id;
     var isBot = s.discord_id === BOT_ID;
-    var tag = 'PROMPT ' + LET[i] + (isMine ? ' · yours' : (isBot ? ' · 🤖' : ''));
+    // authorship stays hidden during voting — the bot must be able to fool the room
+    var tag = 'PROMPT ' + LET[i] + (isMine ? ' · yours' : '');
     if (isMine) {
       return '<div class="vcard mine"><div class="vcard-tag">' + tag + '</div>' +
         '<div class="vcard-text">&gt; ' + escapeHtml(s.text) + '</div></div>';
