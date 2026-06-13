@@ -351,6 +351,14 @@ button.primary:hover { background: #5cff88; }
 .bchips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 .bchip { font-size: 19px; }
 
+/* ── Tier 1 dossier — badges become names ── */
+.dossier .dz-calltag { margin: 8px 0 6px; font-size: 16px; }
+.dz-sub { font-size: 11px; letter-spacing: 2px; color: var(--phosphor-dim); text-transform: uppercase; margin: 12px 0 4px; }
+.dz-row { display: flex; align-items: center; gap: 10px; padding: 3px 0; }
+.dz-badge { font-size: 20px; width: 26px; text-align: center; flex: 0 0 auto; }
+.dz-title { font-size: 15px; flex: 0 0 auto; min-width: 132px; }
+.dz-prog { font-size: 12px; }
+
 /* Desktop: the literal tic-tac-toe board — palette in the dead-center cell */
 @media (min-width: 760px) {
   .board:not(.board-locked) {

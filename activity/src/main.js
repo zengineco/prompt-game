@@ -83,6 +83,90 @@ var BADGES = [
 var BADGE_E = {}; BADGES.forEach(function (b) { BADGE_E[b.key] = b.e; });
 function badgeEmoji(k) { return BADGE_E[k] || '🏷️'; }
 
+// ── TIER 1: IDENTITY ENGINE — badges become names (Goyim's canon) ────────────
+// recv = badges that landed on YOUR prompts; give = badges YOU handed out.
+// Title rungs unlock at career count 5/10/20/30/40 and ★50 (apex).
+var LEVELS = [5, 10, 20, 30, 40, 50];
+function levelIdx(count) { var idx = -1; for (var i = 0; i < LEVELS.length; i++) { if (count >= LEVELS[i]) idx = i; } return idx; }
+
+// RECEIVER ladders — what your prompts earn
+var RECEIVER_LADDERS = {
+  bullseye: ['Marksman', 'Deadeye', 'Sharpshooter', 'Aimbot', 'The Hitman', 'TRUE NORTH'],
+  handshake: ['Cosignee', 'Trusted Source', 'The Plug', "People's Champ", 'Word Is Bond', 'THE GOSPEL'],
+  chef: ['Line Cook', 'Foodie Influencer', 'Kitchen Manager', 'Sous Chef', 'Iron Chef', 'MICHELIN STAR'],
+  clown: ['Shitposter', 'Class Clown', 'Certified Bozo', 'Ringmaster', "King's Jester", 'GIGACLOWN'],
+  yawn: ['Background Noise', 'Asleep At The Wheel', 'The Sandman', 'Human Ambien', 'Cure for Insomnia', 'DEAD WEIGHT'],
+  cap: ['Bullshitter', 'Storyteller', 'Shill', 'Fabricator', 'Con Artist', 'LIVING A LIE'],
+  puke: ['The Ick', 'Tough To Watch', 'Walking Turnoff', 'Hazardous Material', 'Biological Waste', 'SOCIETAL VIRUS'],
+  money: ['Sketchy', 'Inconsiderate', 'Hair Trigger', 'Loose Cannon', 'Total Liability', 'WALKING CRASHOUT'],
+  trash: ['Litterbug', 'Scrapper', 'Hoarder', 'Sanitation Dept', 'Landfill Owner', 'OSCAR AWARD WINNER'],
+  crylaugh: ['Knee Slapper', 'Laugh Track', 'Open Mic Enthusiast', 'Crowd Pleaser', 'Local Headliner', 'THE LAST LAUGH'],
+  fire: ['Playing With Matches', 'Heating-Up', 'The Arsonist', 'Wildfire', 'Solar Flare', 'SUPERNOVA'],
+  sideeye: ['Sus', 'Wellness-Check', 'Person of Interest', 'Red Flag Factory', 'Under Investigation', 'ANOMALOUS'],
+  popcorn: ['Just Browsing', 'Spectator', 'Tourist', 'Fan Of Cinema', 'Art Historian', 'GOLDEN TICKETHOLDER'],
+  chartdown: ['Fumbler', 'Loss Harvester', 'Downtrend Catalyst', 'Free-Fall Economist', 'Greater Fool', 'CHAPTER 11'],
+  robot: ['NPC', 'Reeks Of A.I.', 'Autocompleted', 'Frontier Grade', 'Sentient Slop', 'DATACENTER']
+};
+// GIVER ladders — the Projection: who you become by handing it out
+var GIVER_LADDERS = {
+  bullseye: ['The Well Actually', 'Wiki Editor', 'Reddit Moderator', 'The Fun Police', 'Citation Machine', 'ALL CAPS'],
+  handshake: ['Peacemaker', 'Tagalong', 'Follow-For-Follow', 'Yes-Man', 'Professional Glazer', 'THE HUMAN RETWEET'],
+  chef: ['Microwaver', 'Foodie', 'Uber Eater', 'Room For Dessert', 'Yelp Warrior', 'THE HEALTH INSPECTOR'],
+  clown: ['Haughty', 'Jeerleader', 'Rage Baiter', 'Edge Lord', 'Lobby Goblin', 'FREAKSHOW ADMIN'],
+  yawn: ['Wet Blanket', 'Mood Killer', 'Vibe Burglar', 'Energy Vampire', 'Fun Extinguisher', 'THE ABYSS'],
+  cap: ['Doubter', 'Bullshit Detector', '"Source?"', 'Polygraphic', 'Info Warrior', 'THE CONSPIRACIST'],
+  puke: ['Snowflake', 'Pearl Clutcher', 'Ick-Magnet', 'Repeat Offendee', 'Career Victim', 'SCAT SNOB'],
+  money: ['Hall Monitor', 'Tattletale', "Citizen's Arrest", 'Discord Admin', 'HR Representative', 'COMPLIANCE OFFICER'],
+  trash: ['Lowkey A Hater', 'Salt Miner', 'Dump Trucker', 'Biodegrader', 'Scrapyard Sovereign', 'THE GARBAGE PAIL KID'],
+  crylaugh: ['Tickled', 'Pity Laugh Track', 'Reaction Merchant', 'Sympathy Bot', 'Studio Audience', 'A REAL HOOTENANNY'],
+  fire: ['Cosigner', 'Stan', 'Gas Leak', 'Accelerant', 'Combustor', 'COPE LORD'],
+  sideeye: ['Alt-Watcher', 'Packet Sniffer', 'Encrypted', 'Log Farmer', 'Federal Agent', 'THE PANOPTICON'],
+  popcorn: ['Goon', 'Drama Mogul', 'Clip Farmer', 'Pot Stirrer', 'Narrative Director', 'CLASS ACTION CINEMA'],
+  chartdown: ['Doomer', 'Blackpiller', 'Short Seller', 'Margin Calling', 'Liquidation Engine', 'THE RECESSION'],
+  robot: ['Bot-Caller', 'You Robot', 'Analog Averse', 'Em-Dash Whisperer', 'Autocaptcha', 'SLOP SOMMELIER']
+};
+
+// from raw stats -> the titles you hold + your worn calltag (highest)
+function computeIdentity(stats) {
+  var recvTitles = [], giveTitles = [];
+  (stats || []).forEach(function (s) {
+    var ri = levelIdx(s.recv);
+    if (ri >= 0 && RECEIVER_LADDERS[s.badge]) recvTitles.push({ badge: s.badge, label: RECEIVER_LADDERS[s.badge][ri], idx: ri, count: s.recv, axis: 'recv' });
+    var gi = levelIdx(s.give);
+    if (gi >= 0 && GIVER_LADDERS[s.badge]) giveTitles.push({ badge: s.badge, label: GIVER_LADDERS[s.badge][gi], idx: gi, count: s.give, axis: 'give' });
+  });
+  var all = recvTitles.concat(giveTitles).sort(function (a, b) {
+    return (b.idx - a.idx) || (b.count - a.count) || ((a.axis === 'recv' ? 0 : 1) - (b.axis === 'recv' ? 0 : 1));
+  });
+  return { recvTitles: recvTitles, giveTitles: giveTitles, calltag: all.length ? all[0].label : null };
+}
+
+// the dossier panel — your earned ranks + the Projection + progress to next
+function dossierHtml() {
+  var id = STATE.myIdentity;
+  if (!id || (!id.recvTitles.length && !id.giveTitles.length)) {
+    return '<div class="panel dossier"><div class="label">🪪 YOUR DOSSIER</div>' +
+      '<div class="muted">no rank yet — earn badges on your prompts, and hand them out, to unlock your name.</div></div>';
+  }
+  function row(t, axis) {
+    var ladder = axis === 'recv' ? RECEIVER_LADDERS : GIVER_LADDERS;
+    var nextThresh = t.idx < LEVELS.length - 1 ? LEVELS[t.idx + 1] : null;
+    var prog = nextThresh
+      ? t.count + '/' + nextThresh + ' → ' + ladder[t.badge][t.idx + 1]
+      : 'MAX ★';
+    return '<div class="dz-row"><span class="dz-badge">' + badgeEmoji(t.badge) + '</span>' +
+      '<span class="dz-title">' + escapeHtml(t.label) + '</span>' +
+      '<span class="dz-prog muted">' + escapeHtml(prog) + '</span></div>';
+  }
+  function bySort(a, b) { return (b.idx - a.idx) || (b.count - a.count); }
+  var recv = id.recvTitles.slice().sort(bySort), give = id.giveTitles.slice().sort(bySort);
+  var html = '<div class="panel dossier"><div class="label">🪪 YOUR DOSSIER</div>';
+  if (id.calltag) html += '<div class="dz-calltag">WORN: <b>' + escapeHtml(id.calltag) + '</b></div>';
+  if (recv.length) html += '<div class="dz-sub">WHAT YOUR PROMPTS EARN</div>' + recv.map(function (t) { return row(t, 'recv'); }).join('');
+  if (give.length) html += '<div class="dz-sub">THE PROJECTION — what you inflict</div>' + give.map(function (t) { return row(t, 'give'); }).join('');
+  return html + '</div>';
+}
+
 // fake "decoding" fragments the terminal flickers while a player is still typing
 var SCRAMBLE_WORDS = [
   'manifest parking spot', 'is it illegal to', 'asking for a friend', 'how do i explain this',
@@ -104,6 +188,8 @@ var STATE = {
   votes: [],
   badgeVotes: [],      // v17 board: one badge per (voter, prompt) this round
   armedBadge: null,    // v17 board: badge picked up, awaiting a card (tap-to-place)
+  badgeStats: [],      // Tier 1: my career badge tallies [{badge,recv,give}]
+  myIdentity: null,    // Tier 1: computed titles + worn calltag
   lastTyped: null,     // last current_response we animated
   category: 'all',
   advanceTimer: null,
@@ -256,6 +342,9 @@ function initGuest() {
   STATE.user = { id: 'guest-' + rng, username: 'GUEST-' + rng.toUpperCase() };
   STATE.instanceId = new URLSearchParams(window.location.search).get('room') || 'browser-demo';
   setStatus('players: GUEST MODE (' + STATE.user.username + ') — room "' + STATE.instanceId + '"');
+  // guest-only debug hooks (no-op in Discord) for local verification
+  window.__uid = STATE.user.id;
+  window.__prompt = { computeIdentity: computeIdentity, dossierHtml: dossierHtml, STATE: STATE };
 }
 
 async function joinSession() {
@@ -305,6 +394,7 @@ function subscribe() {
   // award-system tables (session-scoped)
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_tag_votes', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_badge_votes', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_badge_stats', filter: 'discord_id=eq.' + STATE.user.id }, function () { refresh(); });
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_award_grants', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_disputes', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_dispute_votes' }, function () { refresh(); });
@@ -337,6 +427,13 @@ async function refresh() {
       (pr.data || []).forEach(function (pf) { STATE.profilesById[pf.discord_id] = pf; });
     }
     STATE.myProfile = STATE.profilesById[STATE.user.id] || null;
+    // Tier 1 — my badge tallies become my identity; wear the highest as my calltag
+    var bsr = await sb.from('prompt_badge_stats').select('badge,recv,give').eq('discord_id', STATE.user.id);
+    STATE.badgeStats = bsr.data || [];
+    STATE.myIdentity = computeIdentity(STATE.badgeStats);
+    if (STATE.myIdentity.calltag && STATE.myProfile && STATE.myProfile.calltag !== STATE.myIdentity.calltag) {
+      sb.rpc('prompt_set_calltag', { p_discord: STATE.user.id, p_calltag: STATE.myIdentity.calltag });
+    }
     var lb = await sb.from('prompt_profiles').select('username,prestige,rank,calltag').order('prestige', { ascending: false }).limit(8);
     STATE.leaderboard = lb.data || [];
     var mtt = await sb.from('prompt_player_titles').select('*').eq('discord_id', STATE.user.id).order('tier', { ascending: false });
@@ -405,7 +502,7 @@ function renderLobby() {
     (canStart ? '' : '<div class="muted">need 2+ players to start</div>') +
     '<div class="prompt-line"><span class="arrow">&gt;</span> NO FRIENDS ONLINE?</div>' +
     '<div class="row-actions"><button id="findgame-btn" class="ghost">🌐 FIND A PUBLIC GAME</button></div>' +
-    titlePickerHtml() +
+    dossierHtml() +
     leaderboardHtml();
   el('cat-select').addEventListener('change', function (e) { STATE.category = e.target.value; });
   el('start-btn').addEventListener('click', function () {
@@ -839,6 +936,7 @@ function renderGameOver() {
     '<div class="row-actions"><button id="again-btn">▸ PLAY AGAIN</button>' +
     '<button id="findgame-btn" class="ghost">🌐 FIND ANOTHER GAME</button>' +
     '<button id="sharecard-btn" class="ghost">📸 SHARE CARD</button></div>' +
+    dossierHtml() +
     '<div class="share-holder" id="share-holder"></div>';
 
   el('again-btn').addEventListener('click', function () { callFn('reset', {}); });
