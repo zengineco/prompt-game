@@ -62,6 +62,27 @@ var EMOJI = {
 function awEmoji(k) { return EMOJI[k] || '🏷️'; }
 var BOT_ID = 'bot-prompt-ai';   // PROMPT_AI — the fake contestant
 
+// v17 — the 15 reaction badges (drag/tap one onto each prompt). Keys match the referee.
+var BADGES = [
+  { key: 'bullseye', e: '🎯', label: 'Bullseye — nailed it' },
+  { key: 'handshake', e: '🤝', label: 'Handshake — real recognizes real' },
+  { key: 'chef', e: '🧑‍🍳', label: 'Chef — let him cook' },
+  { key: 'clown', e: '🤡', label: 'Clown — bozo energy' },
+  { key: 'yawn', e: '🥱', label: 'Yawn — mid' },
+  { key: 'cap', e: '🧢', label: 'Cap — lies' },
+  { key: 'puke', e: '🤮', label: 'Puke — the ick' },
+  { key: 'money', e: '💸', label: 'Money — out of pocket' },
+  { key: 'trash', e: '🗑️', label: 'Trash — garbage take' },
+  { key: 'crylaugh', e: '😂', label: 'Cry-Laugh — landed it' },
+  { key: 'fire', e: '🔥', label: 'Fire — bars' },
+  { key: 'sideeye', e: '👀', label: 'Side-Eye — sus' },
+  { key: 'popcorn', e: '🍿', label: 'Popcorn — here for it' },
+  { key: 'chartdown', e: '📉', label: 'Chart Down — fumbled' },
+  { key: 'robot', e: '🤖', label: 'Robot — AI slop' }
+];
+var BADGE_E = {}; BADGES.forEach(function (b) { BADGE_E[b.key] = b.e; });
+function badgeEmoji(k) { return BADGE_E[k] || '🏷️'; }
+
 // fake "decoding" fragments the terminal flickers while a player is still typing
 var SCRAMBLE_WORDS = [
   'manifest parking spot', 'is it illegal to', 'asking for a friend', 'how do i explain this',
@@ -81,6 +102,8 @@ var STATE = {
   players: [],
   submissions: [],
   votes: [],
+  badgeVotes: [],      // v17 board: one badge per (voter, prompt) this round
+  armedBadge: null,    // v17 board: badge picked up, awaiting a card (tap-to-place)
   lastTyped: null,     // last current_response we animated
   category: 'all',
   advanceTimer: null,
@@ -281,6 +304,7 @@ function subscribe() {
   });
   // award-system tables (session-scoped)
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_tag_votes', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_badge_votes', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_award_grants', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_disputes', filter: 'session_id=eq.' + STATE.sessionId }, function () { refresh(); });
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'prompt_dispute_votes' }, function () { refresh(); });
@@ -303,6 +327,8 @@ async function refresh() {
     STATE.submissions = subs.data || [];
     var votes = await sb.from('prompt_votes').select('*').eq('session_id', STATE.sessionId).eq('round', round);
     STATE.votes = votes.data || [];
+    var bvs = await sb.from('prompt_badge_votes').select('voter,submission_id,badge').eq('session_id', STATE.sessionId).eq('round', round);
+    STATE.badgeVotes = bvs.data || [];
     // v2.2 — titles/streaks for session players + all-time leaderboard
     var ids = STATE.players.map(function (x) { return x.id; });
     STATE.profilesById = {};
@@ -437,9 +463,9 @@ function playersPanelHtml(mode) {
     var me = p.id === STATE.user.id;
     var statusCell;
     if (mode === 'voting') {
-      var voted = STATE.crownVoters[p.id] || STATE.crownVoters[p.discord_id];
-      statusCell = voted ? '<span class="pstatus on">[LOCKED IN]</span>'
-                         : '<span class="pstatus wait">DECIDING…</span>';
+      var locked = (p.locked_round === STATE.session.round);
+      statusCell = locked ? '<span class="pstatus on">[LOCKED IN]</span>'
+                          : '<span class="pstatus wait">DECIDING…</span>';
     } else {
       var done = STATE.submissions.some(function (s) { return (s.discord_id === p.id || s.discord_id === p.discord_id) && !s.hidden; });
       statusCell = done ? '<span class="pstatus on">[SUBMITTED]</span>'
@@ -467,7 +493,7 @@ function tickAll() {
   if (secsEl && s && s.deadline) {
     var rem = Math.max(0, Math.ceil((new Date(s.deadline).getTime() - Date.now()) / 1000));
     secsEl.textContent = rem + 's';
-    var total = s.phase === 'voting' ? 50 : (s.phase === 'resolving' ? 12 : 75);
+    var total = s.phase === 'voting' ? 75 : (s.phase === 'resolving' ? 12 : 75);
     var fill = el('timer-fill');
     if (fill) { fill.style.width = Math.max(0, Math.min(100, (rem / total) * 100)) + '%'; fill.className = 'timer-fill' + (rem <= 8 ? ' low' : ''); }
   }
@@ -537,172 +563,157 @@ function doSubmit() {
     });
 }
 
+// ── v17 board voting — drop one badge per prompt (drag desktop / tap mobile) ──
+function placeBadge(subId, badgeKey) {
+  callFn('badgevote', { voter_discord_id: STATE.user.id, submission_id: subId, badge: badgeKey || '' })
+    .catch(function (e) { console.error('badgevote:', e); });
+}
+function wireBoard() {
+  Array.prototype.forEach.call(document.querySelectorAll('.badge-btn'), function (b) {
+    b.addEventListener('click', function () {
+      var k = b.getAttribute('data-badge');
+      STATE.armedBadge = (STATE.armedBadge === k) ? null : k;
+      Array.prototype.forEach.call(document.querySelectorAll('.badge-btn'), function (x) {
+        x.classList.toggle('armed', x.getAttribute('data-badge') === STATE.armedBadge);
+      });
+      var instr = el('board-instr');
+      if (instr) instr.innerHTML = STATE.armedBadge
+        ? 'now tap a prompt to drop ' + badgeEmoji(STATE.armedBadge) + ' on it'
+        : 'pick up a badge, drop it on a prompt (drag, or tap then tap)';
+    });
+    b.addEventListener('dragstart', function (e) { try { e.dataTransfer.setData('text/badge', b.getAttribute('data-badge')); } catch (x) {} });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.vcard[data-sub]'), function (card) {
+    var subId = card.getAttribute('data-sub');
+    card.addEventListener('click', function () {
+      if (!STATE.armedBadge) return;
+      var cur = card.getAttribute('data-mybadge') || '';
+      placeBadge(subId, cur === STATE.armedBadge ? '' : STATE.armedBadge);
+    });
+    card.addEventListener('dragover', function (e) { e.preventDefault(); card.classList.add('drop-hover'); });
+    card.addEventListener('dragleave', function () { card.classList.remove('drop-hover'); });
+    card.addEventListener('drop', function (e) {
+      e.preventDefault(); card.classList.remove('drop-hover');
+      var k = ''; try { k = e.dataTransfer.getData('text/badge'); } catch (x) {}
+      if (k) placeBadge(subId, k);
+    });
+  });
+}
+
 function renderVoting() {
-  var crowns = STATE.awardDefs.filter(function (a) { return a.earn === 'hand' && a.valence === 'crown'; });
-  var reads = STATE.awardDefs.filter(function (a) { return a.earn === 'hand' && a.valence !== 'crown'; });
-  var myCrown = STATE.myTags.find(function (t) { return t.slot === 'crown'; });
-  var myRead = STATE.myTags.find(function (t) { return t.slot === 'read'; });
+  var subs = STATE.submissions.slice().filter(function (s) { return !s.hidden; });
+  var myBadge = {};
+  STATE.badgeVotes.forEach(function (v) { if (v.voter === STATE.user.id) myBadge[v.submission_id] = v.badge; });
+  var iLocked = STATE.players.some(function (p) { return p.id === STATE.user.id && p.locked_round === STATE.session.round; });
+  var placed = Object.keys(myBadge).length;
+  var LET = 'ABCDEFGH';
 
-  function opts(list) { return list.map(function (a) { return '<option value="' + a.key + '">' + awEmoji(a.key) + ' ' + escapeHtml(a.label) + '</option>'; }).join(''); }
-  var crownOpts = opts(crowns), readOpts = opts(reads);
-
-  var cards = STATE.submissions.map(function (s) {
-    var isMine = s.discord_id === STATE.user.id;
-    if (s.hidden) return '<div class="sub-card2 removed"><div class="sub-text">🚫 removed by the table</div></div>';
-    var tags = '';
-    if (myCrown && myCrown.submission_id === s.id) tags += '<span class="my-tag">👑 ' + escapeHtml((STATE.awardsByKey[myCrown.award_key] || {}).label || '') + '</span>';
-    if (myRead && myRead.submission_id === s.id) tags += '<span class="my-tag">🏷️ ' + escapeHtml((STATE.awardsByKey[myRead.award_key] || {}).label || '') + '</span>';
-    var iReported = STATE.reports.some(function (r) { return r.submission_id === s.id && r.reporter === STATE.user.id; });
-    var reportBtn = isMine ? ''
-      : (iReported ? '<span class="reported">🚩 flagged</span>'
-                   : '<button class="report-btn" data-sub="' + s.id + '" title="report hate / slurs">🚩</button>');
-    var actions = '<div class="sub-actions">' +
-      (isMine
-        ? '<span class="muted">your prompt</span>'
-        : '<button class="crown-btn" data-sub="' + s.id + '"' + (myCrown ? ' disabled' : '') + '>👑 crown</button>') +
-      '<button class="read-btn" data-sub="' + s.id + '"' + (myRead ? ' disabled' : '') + '>🏷️ read</button>' +
-      reportBtn +
-      '</div>';
-    return '<div class="sub-card2"><div class="sub-text">&gt; ' + escapeHtml(s.text) + '</div>' + tags + actions + '</div>';
+  var palette = BADGES.map(function (b) {
+    var armed = STATE.armedBadge === b.key ? ' armed' : '';
+    return '<button class="badge-btn' + armed + '" data-badge="' + b.key + '" draggable="true" title="' + escapeHtml(b.label) + '">' + b.e + '</button>';
   }).join('');
 
-  var status = (myCrown ? '👑 crown cast' : '👑 crown REQUIRED') + ' &nbsp;·&nbsp; ' + (myRead ? '🏷️ read cast' : '🏷️ read optional');
+  var cards = subs.map(function (s, i) {
+    var isMine = s.discord_id === STATE.user.id;
+    var isBot = s.discord_id === BOT_ID;
+    var tag = 'PROMPT ' + LET[i] + (isMine ? ' · yours' : (isBot ? ' · 🤖' : ''));
+    if (isMine) {
+      return '<div class="vcard mine"><div class="vcard-tag">' + tag + '</div>' +
+        '<div class="vcard-text">&gt; ' + escapeHtml(s.text) + '</div></div>';
+    }
+    var iReported = STATE.reports.some(function (r) { return r.submission_id === s.id && r.reporter === STATE.user.id; });
+    var rep = iReported ? '<span class="reported" title="flagged">🚩</span>'
+      : '<button class="report-btn" data-sub="' + s.id + '" title="report hate / slurs">🚩</button>';
+    var mb = myBadge[s.id];
+    var slot = mb ? '<span class="placed">' + badgeEmoji(mb) + '</span>' : '<span class="slot-empty">+</span>';
+    return '<div class="vcard' + (iLocked ? ' locked' : '') + (mb ? ' has-badge' : '') + '" data-sub="' + s.id + '" data-mybadge="' + (mb || '') + '">' +
+      '<div class="vcard-tag">' + tag + '<span class="vcard-rep">' + rep + '</span></div>' +
+      '<div class="vcard-text">&gt; ' + escapeHtml(s.text) + '</div>' +
+      '<div class="vcard-slot">' + slot + '</div></div>';
+  }).join('');
 
   el('game').innerHTML =
-    termHeadHtml('&gt;&gt; THE AI ANSWERED — crown the prompt that nailed it', false) +
-    '<div class="prompt-line"><span class="arrow">&gt;</span> 👑 CROWN the best, then optionally 🏷️ READ one:</div>' +
-    '<div class="award-pickers">👑 <select id="crown-sel">' + crownOpts + '</select> &nbsp; 🏷️ <select id="read-sel">' + readOpts + '</select></div>' +
-    '<div class="subs">' + cards + '</div>' +
-    '<div class="muted">' + status + '</div>' +
+    termHeadHtml('&gt;&gt; THE AI ANSWERED — badge every prompt that made noise', false) +
+    '<div class="prompt-line"><span class="arrow">&gt;</span> <span id="board-instr">' +
+      (iLocked ? 'LOCKED IN — waiting on the table…' : 'pick up a badge, drop it on a prompt (drag, or tap then tap)') + '</span></div>' +
+    '<div class="board' + (iLocked ? ' board-locked' : '') + '">' +
+      '<div class="palette">' + palette + '</div>' +
+      '<div class="board-cards">' + cards + '</div>' +
+    '</div>' +
+    '<div class="muted board-tally">' + placed + ' placed · one badge per prompt</div>' +
+    '<div class="row-actions"><button id="lock-btn" class="primary"' + (iLocked ? ' disabled' : '') + '>' + (iLocked ? '✅ LOCKED IN' : '🔒 LOCK IN') + '</button> ' +
+    '<button id="skip-btn" class="ghost">force results ▸</button></div>' +
     playersPanelHtml('voting') +
-    timerBarHtml() +
-    '<div class="row-actions"><button id="skip-btn" class="ghost">force results ▸</button></div>';
+    timerBarHtml();
 
-  Array.prototype.forEach.call(document.querySelectorAll('.crown-btn'), function (b) {
-    b.addEventListener('click', function () {
-      callFn('tagvote', { voter_discord_id: STATE.user.id, submission_id: b.getAttribute('data-sub'), award_key: el('crown-sel').value, slot: 'crown' });
+  if (!iLocked) {
+    wireBoard();
+    Array.prototype.forEach.call(document.querySelectorAll('.report-btn'), function (b) {
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        b.disabled = true; b.textContent = '🚩…';
+        callFn('report', { reporter: STATE.user.id, submission_id: b.getAttribute('data-sub') });
+      });
     });
-  });
-  Array.prototype.forEach.call(document.querySelectorAll('.read-btn'), function (b) {
-    b.addEventListener('click', function () {
-      callFn('tagvote', { voter_discord_id: STATE.user.id, submission_id: b.getAttribute('data-sub'), award_key: el('read-sel').value, slot: 'read' });
-    });
-  });
-  Array.prototype.forEach.call(document.querySelectorAll('.report-btn'), function (b) {
-    b.addEventListener('click', function () {
-      b.disabled = true; b.textContent = '🚩…';
-      callFn('report', { reporter: STATE.user.id, submission_id: b.getAttribute('data-sub') });
-    });
-  });
+    var lb = el('lock-btn');
+    if (lb) lb.addEventListener('click', function () { lb.disabled = true; lb.textContent = '✅ LOCKED IN'; callFn('lockvote', { voter_discord_id: STATE.user.id }); });
+  }
   el('skip-btn').addEventListener('click', function () { callFn('skip', {}); });
 }
 
 function renderResolving() {
-  var byKey = STATE.awardsByKey;
   var r = STATE.session.round;
-  // play the staged reveal ONCE per round: counts → authors → full awards
+  // staged reveal once per round: badge counts → authors + badges
   if (STATE.revealRound !== r) {
     STATE.revealRound = r; STATE.revealStage = 0;
     if (STATE.revealT1) clearTimeout(STATE.revealT1);
     if (STATE.revealT2) clearTimeout(STATE.revealT2);
-    STATE.revealT1 = setTimeout(function () { if (STATE.revealStage < 1) STATE.revealStage = 1; if (STATE.session && STATE.session.phase === 'resolving') render(); }, 2400);
-    STATE.revealT2 = setTimeout(function () { if (STATE.revealStage < 2) STATE.revealStage = 2; if (STATE.session && STATE.session.phase === 'resolving') render(); }, 4200);
+    STATE.revealT1 = setTimeout(function () { if (STATE.revealStage < 1) STATE.revealStage = 1; if (STATE.session && STATE.session.phase === 'resolving') render(); }, 2200);
   }
   var stage = STATE.revealStage || 0;
-  if (STATE.disputes.length) stage = 2; // a dispute means the reveal already finished
 
-  function scoreOf(sub) { return STATE.roundGrants.filter(function (g) { return g.recipient === sub.discord_id; }).reduce(function (a, g) { return a + ((byKey[g.award_key] || {}).value || 0); }, 0); }
-  function crownsOf(sub) { return STATE.roundGrants.filter(function (g) { return g.recipient === sub.discord_id && g.granted_by !== 'referee' && (byKey[g.award_key] || {}).valence === 'crown'; }).length; }
-  function nameOf(id) { var p = STATE.players.find(function (x) { return x.id === id; }); return p ? p.username : id; }
-
-  var subs = STATE.submissions.slice().filter(function (s) { return !s.hidden; });
-  var sorted = subs.slice().sort(function (a, b) { return scoreOf(b) - scoreOf(a); });
-  var top = sorted.length ? scoreOf(sorted[0]) : 0;
-  var botWon = sorted.length > 0 && sorted[0].discord_id === BOT_ID && top > 0;
+  function badgesOf(sub) { return STATE.badgeVotes.filter(function (v) { return v.submission_id === sub.id; }); }
+  function countOf(sub) { return badgesOf(sub).length; }
   var LET = 'ABCDEFGH';
+  var subs = STATE.submissions.slice().filter(function (s) { return !s.hidden; });
+  var sorted = subs.slice().sort(function (a, b) { return countOf(b) - countOf(a); });
+  var top = sorted.length ? countOf(sorted[0]) : 0;
+  var botWon = sorted.length > 0 && sorted[0].discord_id === BOT_ID && top > 0;
 
   var head =
-    '<div class="panel"><div class="label">&gt;&gt; Round ' + STATE.session.round + ' — Results</div>' +
+    '<div class="panel"><div class="label">&gt;&gt; Round ' + r + ' — Results</div>' +
     '<div class="transmission-small">"' + escapeHtml(STATE.session.current_response) + '"</div></div>';
 
   var bodyHtml;
   if (stage === 0) {
-    // STAGE 1: vote counts only, authors hidden
-    bodyHtml = '<div class="panel"><div class="label">TALLYING THE VOTES…</div>' +
+    // STAGE 1: badge counts only, authors hidden
+    bodyHtml = '<div class="panel"><div class="label">TALLYING THE BADGES…</div>' +
       sorted.map(function (s, i) {
-        var c = crownsOf(s);
-        return '<div class="result-row"><span class="who">PROMPT ' + LET[i] + '</span> <span class="muted">…… ' + c + (c === 1 ? ' crown' : ' crowns') + '</span></div>';
+        var c = countOf(s);
+        return '<div class="result-row"><span class="who">PROMPT ' + LET[i] + '</span> <span class="muted">…… ' + c + (c === 1 ? ' badge' : ' badges') + '</span></div>';
       }).join('') + '</div>' +
-      '<div class="muted">…revealing the authors…</div>';
+      '<div class="muted">…revealing who…</div>';
   } else {
-    // STAGE 2/3: authors revealed; full awards + dispute only at stage 2
-    var myDispute = STATE.disputes.find(function (d) { return d.disputer === STATE.user.id; });
-    var hasIdentity = !!(STATE.myProfile && STATE.myProfile.calltag) || (STATE.myTitles && STATE.myTitles.length > 0);
+    // STAGE 2: authors + the badges each prompt collected
     var rowsHtml = sorted.map(function (s, i) {
-      var isMine = s.discord_id === STATE.user.id;
       var isBot = s.discord_id === BOT_ID;
-      var win = (scoreOf(s) === top && top > 0) ? ' win' : '';
+      var c = countOf(s);
+      var win = (c === top && top > 0) ? ' win' : '';
+      var chips = badgesOf(s).map(function (v) { return '<span class="bchip">' + badgeEmoji(v.badge) + '</span>'; }).join('');
       var who = '<span class="reveal-let">' + LET[i] + '</span> ' + escapeHtml(s.username) + (isBot ? ' <span class="bot-tag">🤖 BOT</span>' : '');
-      var awards = '';
-      if (stage >= 2) {
-        var grants = STATE.roundGrants.filter(function (g) { return g.recipient === s.discord_id; });
-        var chips = grants.map(function (g) {
-          var d = byKey[g.award_key] || {};
-          var canDispute = isMine && !isBot && !myDispute && hasIdentity; // disputes unlock at your first calltag
-          var dbtn = canDispute ? ' <button class="dispute-btn" data-grant="' + g.id + '" title="dispute this tag">⚖️</button>' : '';
-          return '<span class="award-chip rarity-' + escapeHtml(g.rarity) + '">' + awEmoji(g.award_key) + ' ' + escapeHtml(d.label || g.award_key) + '</span>' + dbtn;
-        }).join(' ');
-        awards = chips ? '<div class="award-row">' + chips + '</div>' : '<div class="muted">— no awards —</div>';
-      }
       return '<div class="result-row' + win + (isBot ? ' botrow' : '') + '"><span class="who">' + who + '</span> ' +
-        (win ? '🏆 ' : '') + '<span class="muted">(' + scoreOf(s) + ')</span>' +
-        '<div class="sub-text">&gt; ' + escapeHtml(s.text) + '</div>' + awards + '</div>';
+        (win ? '🏆 ' : '') + '<span class="muted">(' + c + ')</span>' +
+        '<div class="sub-text">&gt; ' + escapeHtml(s.text) + '</div>' +
+        (chips ? '<div class="bchips">' + chips + '</div>' : '<div class="muted">— no badges —</div>') + '</div>';
     }).join('');
-    var roast = botWon ? '<div class="panel roast"><div class="label">🤖 PROMPT_AI FOOLED THE ROOM</div><div class="sub-text">the machine out-guessed every human. nobody scores this round.</div></div>' : '';
+    var roast = botWon ? '<div class="panel roast"><div class="label">🤖 PROMPT_AI TOPPED THE BOARD</div><div class="sub-text">the machine pulled the most badges this round. humbling.</div></div>' : '';
     bodyHtml = roast + '<div class="results">' + rowsHtml + '</div>';
   }
 
-  // dispute UI only once the table is fully revealed
-  var disputeHtml = '', resolvedHtml = '', openDisputes = [];
-  if (stage >= 2) {
-    openDisputes = STATE.disputes.filter(function (d) { return d.status === 'open'; });
-    disputeHtml = openDisputes.map(function (d) {
-      var votes = STATE.disputeVotes.filter(function (v) { return v.dispute_id === d.id; });
-      var up = votes.filter(function (v) { return v.uphold; }).length;
-      var over = votes.length - up;
-      var amDisputer = d.disputer === STATE.user.id;
-      var iVoted = votes.some(function (v) { return v.voter === STATE.user.id; });
-      var awardLabel = (byKey[d.award_key] || {}).label || d.award_key;
-      var ctrl = (amDisputer || iVoted)
-        ? '<span class="muted">' + (amDisputer ? 'awaiting the verdict...' : 'voted') + '</span>'
-        : '<button class="dv-up" data-d="' + d.id + '">UPHOLD</button> <button class="dv-over" data-d="' + d.id + '">OVERTURN</button>';
-      return '<div class="panel dispute-panel"><div class="label">⚖️ DISPUTE</div>' +
-        '<div class="sub-text"><b>' + escapeHtml(nameOf(d.disputer)) + '</b> contests <span class="award-chip">' + escapeHtml(awardLabel) + '</span> — does it stick?</div>' +
-        '<div class="row-actions">' + ctrl + '</div>' +
-        '<div class="muted">uphold ' + up + ' · overturn ' + over + '</div></div>';
-    }).join('');
-    resolvedHtml = STATE.disputes.filter(function (d) { return d.status !== 'open'; }).map(function (d) {
-      var awardLabel = (byKey[d.award_key] || {}).label || d.award_key;
-      return '<div class="muted">⚖️ ' + escapeHtml(awardLabel) + (d.status === 'overturned' ? ' — STRUCK by the table' : ' — UPHELD') + '</div>';
-    }).join('');
-  }
-
   el('game').innerHTML =
-    head +
-    disputeHtml + (resolvedHtml ? '<div class="results">' + resolvedHtml + '</div>' : '') +
-    bodyHtml +
-    timerBarHtml() +
-    (stage >= 2 ? '<div class="row-actions"><button id="next-btn"' + (openDisputes.length ? ' disabled' : '') + '>NEXT ROUND ▸</button></div>' : '');
+    head + bodyHtml + timerBarHtml() +
+    (stage >= 1 ? '<div class="row-actions"><button id="next-btn">NEXT ROUND ▸</button></div>' : '');
 
-  Array.prototype.forEach.call(document.querySelectorAll('.dispute-btn'), function (b) {
-    b.addEventListener('click', function () { callFn('dispute', { grant_id: b.getAttribute('data-grant'), disputer: STATE.user.id }); });
-  });
-  Array.prototype.forEach.call(document.querySelectorAll('.dv-up'), function (b) {
-    b.addEventListener('click', function () { callFn('disputevote', { dispute_id: b.getAttribute('data-d'), voter: STATE.user.id, uphold: true }); });
-  });
-  Array.prototype.forEach.call(document.querySelectorAll('.dv-over'), function (b) {
-    b.addEventListener('click', function () { callFn('disputevote', { dispute_id: b.getAttribute('data-d'), voter: STATE.user.id, uphold: false }); });
-  });
   var nb = el('next-btn'); if (nb) nb.addEventListener('click', function () { callFn('next', {}); });
   // (auto-advance is handled globally by scheduleAutoAdvance() in render())
 }

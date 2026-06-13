@@ -297,6 +297,81 @@ button.ghost:hover { background: rgba(31, 156, 67, 0.12); }
 .vote-btn { padding: 0 16px; height: 38px; }
 .sub-text { font-size: 16px; line-height: 1.4; }
 
+/* ── v17 BOARD VOTING — drag/tap badges onto prompts ─────────────────────── */
+.board { margin: 12px 0; }
+.palette {
+  display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+  padding: 10px; margin-bottom: 14px;
+  border: 1px solid var(--phosphor-dim); background: var(--bg-panel);
+}
+.badge-btn {
+  font-size: 24px; line-height: 1; width: 44px; height: 44px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.35); border: 1px solid var(--phosphor-dim);
+  border-radius: 6px; cursor: grab; letter-spacing: 0;
+  transition: transform .08s, box-shadow .08s, background .08s;
+  touch-action: manipulation; -webkit-user-select: none; user-select: none;
+}
+.badge-btn:hover { background: rgba(51, 255, 102, 0.1); transform: translateY(-2px); }
+.badge-btn.armed {
+  border-color: var(--phosphor); background: rgba(51, 255, 102, 0.18);
+  box-shadow: var(--glow); transform: translateY(-2px) scale(1.08);
+}
+.board-cards { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.vcard {
+  border: 1px solid var(--phosphor-dim); background: var(--bg-panel);
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+  cursor: pointer; position: relative; transition: box-shadow .1s, border-color .1s;
+}
+.vcard.drop-hover, .vcard:hover { border-color: var(--phosphor); box-shadow: var(--glow); }
+.vcard.mine { opacity: 0.5; cursor: default; border-style: dashed; }
+.vcard.mine:hover { border-color: var(--phosphor-dim); box-shadow: none; }
+.vcard.locked { opacity: 0.7; cursor: default; }
+.vcard.has-badge { border-color: var(--phosphor); }
+.vcard-tag { font-size: 11px; color: var(--phosphor-dim); letter-spacing: 2px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+.vcard-rep { flex: 0 0 auto; }
+.vcard-rep .report-btn { border: none; padding: 0 4px; font-size: 13px; letter-spacing: 0; opacity: 0.6; }
+.vcard-rep .report-btn:hover { opacity: 1; background: transparent; }
+.vcard-rep .reported { font-size: 13px; }
+.vcard-text { font-size: 15px; line-height: 1.35; }
+.vcard-slot {
+  align-self: flex-end; min-width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px dashed var(--phosphor-dim); border-radius: 6px;
+}
+.vcard-slot .slot-empty { color: var(--phosphor-dim); font-size: 22px; }
+.vcard-slot .placed { font-size: 26px; text-shadow: var(--glow); }
+.vcard.has-badge .vcard-slot { border-style: solid; border-color: var(--phosphor); }
+.board-tally { margin-top: 6px; }
+button.primary {
+  background: var(--phosphor); color: #04210f; border-color: var(--phosphor);
+  font-weight: bold; text-shadow: none; padding: 8px 20px;
+}
+button.primary:hover { background: #5cff88; }
+.bchips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+.bchip { font-size: 19px; }
+
+/* Desktop: the literal tic-tac-toe board — palette in the dead-center cell */
+@media (min-width: 760px) {
+  .board:not(.board-locked) {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    grid-auto-rows: minmax(96px, auto); gap: 8px;
+  }
+  .board:not(.board-locked) .palette {
+    position: static; margin: 0; grid-column: 2; grid-row: 2;
+    align-content: center;
+  }
+  .board:not(.board-locked) .board-cards { display: contents; }
+  .board:not(.board-locked) .board-cards .vcard:nth-child(1) { grid-area: 1 / 1; }
+  .board:not(.board-locked) .board-cards .vcard:nth-child(2) { grid-area: 1 / 2; }
+  .board:not(.board-locked) .board-cards .vcard:nth-child(3) { grid-area: 1 / 3; }
+  .board:not(.board-locked) .board-cards .vcard:nth-child(4) { grid-area: 2 / 1; }
+  .board:not(.board-locked) .board-cards .vcard:nth-child(5) { grid-area: 2 / 3; }
+  .board:not(.board-locked) .board-cards .vcard:nth-child(6) { grid-area: 3 / 1; }
+  .board:not(.board-locked) .board-cards .vcard:nth-child(7) { grid-area: 3 / 2; }
+  .board:not(.board-locked) .board-cards .vcard:nth-child(8) { grid-area: 3 / 3; }
+}
+
 /* Results */
 .results { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
 .result-row {
