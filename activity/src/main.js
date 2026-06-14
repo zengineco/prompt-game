@@ -128,18 +128,22 @@ var GIVER_LADDERS = {
 
 // from raw stats -> the titles you hold + your worn calltag (highest)
 function computeIdentity(stats) {
-  var recvTitles = [], giveTitles = [];
+  var recvTitles = [], giveTitles = [], totalPrestige = 0;
   (stats || []).forEach(function (s) {
     var ri = levelIdx(s.recv);
-    if (ri >= 0 && RECEIVER_LADDERS[s.badge]) recvTitles.push({ badge: s.badge, label: RECEIVER_LADDERS[s.badge][ri], idx: ri, count: s.recv, axis: 'recv' });
+    if (ri >= 0 && RECEIVER_LADDERS[s.badge]) { var rp = Math.floor(s.recv / 50); recvTitles.push({ badge: s.badge, label: RECEIVER_LADDERS[s.badge][ri], idx: ri, count: s.recv, axis: 'recv', prestige: rp }); totalPrestige += rp; }
     var gi = levelIdx(s.give);
-    if (gi >= 0 && GIVER_LADDERS[s.badge]) giveTitles.push({ badge: s.badge, label: GIVER_LADDERS[s.badge][gi], idx: gi, count: s.give, axis: 'give' });
+    if (gi >= 0 && GIVER_LADDERS[s.badge]) { var gp = Math.floor(s.give / 50); giveTitles.push({ badge: s.badge, label: GIVER_LADDERS[s.badge][gi], idx: gi, count: s.give, axis: 'give', prestige: gp }); totalPrestige += gp; }
   });
+  // prestige outranks rung outranks count; receiver wins final ties
   var all = recvTitles.concat(giveTitles).sort(function (a, b) {
-    return (b.idx - a.idx) || (b.count - a.count) || ((a.axis === 'recv' ? 0 : 1) - (b.axis === 'recv' ? 0 : 1));
+    return (b.prestige - a.prestige) || (b.idx - a.idx) || (b.count - a.count) || ((a.axis === 'recv' ? 0 : 1) - (b.axis === 'recv' ? 0 : 1));
   });
-  return { recvTitles: recvTitles, giveTitles: giveTitles, calltag: all.length ? all[0].label : null };
+  return { recvTitles: recvTitles, giveTitles: giveTitles, totalPrestige: totalPrestige, calltag: all.length ? all[0].label : null, calltagPrestige: all.length ? all[0].prestige : 0 };
 }
+
+// gold ★ per completed prestige cycle (50 of a badge), capped for display
+function stars(n) { n = n || 0; return n > 0 ? ' <span class="prestige-star">' + new Array(Math.min(n, 9) + 1).join('★') + '</span>' : ''; }
 
 // the dossier panel — your earned ranks + the Projection + progress to next
 function dossierHtml() {
@@ -153,9 +157,9 @@ function dossierHtml() {
     var nextThresh = t.idx < LEVELS.length - 1 ? LEVELS[t.idx + 1] : null;
     var prog = nextThresh
       ? t.count + '/' + nextThresh + ' → ' + ladder[t.badge][t.idx + 1]
-      : 'MAX ★';
+      : t.count + '/' + ((t.prestige + 1) * 50) + ' → ★' + (t.prestige + 1);
     return '<div class="dz-row"><span class="dz-badge">' + badgeEmoji(t.badge) + '</span>' +
-      '<span class="dz-title">' + escapeHtml(t.label) + '</span>' +
+      '<span class="dz-title">' + escapeHtml(t.label) + stars(t.prestige) + '</span>' +
       '<span class="dz-prog muted">' + escapeHtml(prog) + '</span></div>';
   }
   function bySort(a, b) { return (b.idx - a.idx) || (b.count - a.count); }
@@ -163,7 +167,7 @@ function dossierHtml() {
   var chosen = (STATE.myProfile && STATE.myProfile.chosen_title) || '__auto__';
   var worn = chosen === '__none__' ? '(hidden)' : ((STATE.myProfile && STATE.myProfile.calltag) || id.calltag || '—');
   var html = '<div class="panel dossier"><div class="label">🪪 YOUR DOSSIER</div>';
-  html += '<div class="dz-calltag">WORN: <b>' + escapeHtml(worn) + '</b></div>';
+  html += '<div class="dz-calltag">WORN: <b>' + escapeHtml(worn) + '</b>' + stars(id.calltagPrestige) + '</div>';
   var seen = {}, opts = '<option value="__auto__"' + (chosen === '__auto__' ? ' selected' : '') + '>★ Auto (highest)</option>';
   recv.concat(give).forEach(function (t) { if (seen[t.label]) return; seen[t.label] = 1; opts += '<option value="' + escapeHtml(t.label) + '"' + (chosen === t.label ? ' selected' : '') + '>' + escapeHtml(t.label) + '</option>'; });
   opts += '<option value="__none__"' + (chosen === '__none__' ? ' selected' : '') + '>— no label —</option>';
@@ -426,7 +430,8 @@ async function refresh() {
     var s = await sb.from('prompt_sessions').select('*').eq('id', STATE.sessionId).maybeSingle();
     STATE.session = s.data;
     var p = await sb.from('prompt_players').select('*').eq('session_id', STATE.sessionId).order('joined_at', { ascending: true });
-    STATE.players = p.data || [];
+    // normalize id -> discord_id so player↔profile↔me lookups (profilesById[p.id], p.id===user.id) work
+    STATE.players = (p.data || []).map(function (x) { x.id = x.discord_id; return x; });
     var round = STATE.session ? STATE.session.round : 0;
     var subs = await sb.from('prompt_submissions').select('*').eq('session_id', STATE.sessionId).eq('round', round);
     STATE.submissions = subs.data || [];
@@ -449,7 +454,10 @@ async function refresh() {
     // auto-wear the highest ONLY until the player has made a choice (chosen_title set)
     var chosenT = STATE.myProfile && STATE.myProfile.chosen_title;
     if (!chosenT && STATE.myIdentity.calltag && STATE.myProfile && STATE.myProfile.calltag !== STATE.myIdentity.calltag) {
-      sb.rpc('prompt_set_calltag', { p_discord: STATE.user.id, p_calltag: STATE.myIdentity.calltag });
+      sb.rpc('prompt_set_calltag', { p_discord: STATE.user.id, p_calltag: STATE.myIdentity.calltag }).then(function () {}, function () {});
+    }
+    if (STATE.myProfile && (STATE.myProfile.prestige || 0) !== STATE.myIdentity.totalPrestige) {
+      sb.rpc('prompt_set_prestige', { p_discord: STATE.user.id, p_prestige: STATE.myIdentity.totalPrestige }).then(function () {}, function () {});
     }
     var lb = await sb.from('prompt_profiles').select('username,prestige,rank,calltag').order('prestige', { ascending: false }).limit(8);
     STATE.leaderboard = lb.data || [];
@@ -967,6 +975,7 @@ function renderScoreboard() {
     var me = p.id === STATE.user.id ? ' (you)' : '';
     var prof = STATE.profilesById[p.id];
     var title = (prof && prof.calltag) ? ' <span class="title-tag">' + escapeHtml(prof.calltag) + '</span>' : '';
+    title += stars(prof && prof.prestige);
     return '<span class="score-chip">' + m + ' ' + escapeHtml(p.username) + me + title + ' — ' + p.score + '</span>';
   }).join('');
   var mine = '';
@@ -998,7 +1007,7 @@ function leaderboardHtml() {
     var isBot = p.username === 'PROMPT_AI';
     var sig = p.calltag ? ' <span class="title-tag">' + escapeHtml(p.calltag) + '</span>' : '';
     return '<div class="lb-row' + (isBot ? ' botrow' : '') + '">' + medal + ' ' + (isBot ? '🤖 ' : '') +
-      '<span class="who">' + escapeHtml(p.username) + '</span>' + sig + ' · ' + (p.prestige || 0) + 'p</div>';
+      '<span class="who">' + escapeHtml(p.username) + '</span>' + sig + stars(p.prestige) + '</div>';
   }).join('') || '<div class="muted">no rankings yet — play a game</div>';
   var tabs = '<div class="lb-tabs">' +
     '<button class="lb-tab' + (tab === 'global' ? ' on' : '') + '" data-tab="global">🌐 GLOBAL</button>' +
