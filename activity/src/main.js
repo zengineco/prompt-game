@@ -126,20 +126,105 @@ var GIVER_LADDERS = {
   robot: ['Bot-Caller', 'You Robot', 'Analog Averse', 'Em-Dash Whisperer', 'Autocaptcha', 'SLOP SOMMELIER']
 };
 
+// COMBOS — unlock when both badges hit Lv10+ on the axis (recv for these, give for the givers).
+// Keys are the two/three badge keys sorted alphabetically + '+'. (Goyim's canon; deltas + reskins applied.)
+var RECEIVER_COMBOS = {
+  'bullseye+clown': 'Precision Idiot', 'bullseye+yawn': 'Captain Obvious', 'bullseye+trash': 'The Midwit', 'bullseye+chartdown': 'Snatching Defeat',
+  'cap+handshake': 'Snake Oil', 'handshake+money': 'The Enabler', 'handshake+trash': 'Groupthink Garbage', 'handshake+robot': 'The NPC Hivemind',
+  'chef+clown': 'The Gourmet Clown', 'chef+yawn': 'Over-Engineered Mid', 'cap+chef': 'The Catfish', 'chef+puke': 'The Toxic Asset',
+  'chef+money': 'Backstreet Chef', 'chef+trash': 'Gourmet Garbage', 'chef+sideeye': 'The Mad Scientist', 'chef+popcorn': 'The Instigator',
+  'chartdown+chef': 'Kitchen Nightmare', 'chef+robot': 'The Microwave Chef',
+  'clown+yawn': 'The Mime', 'cap+clown': 'The Clout Chaser', 'clown+puke': 'The Cringe Lord', 'clown+money': 'The Sugar Daddy',
+  'clown+trash': 'The Circus Act', 'clown+crylaugh': 'The Laughingstock', 'clown+fire': 'Crash Test Dummy', 'clown+sideeye': 'The Local Eccentric',
+  'clown+popcorn': 'Main Character Energy', 'chartdown+clown': 'The Fumbled Bit', 'clown+robot': 'The Botnik',
+  'cap+yawn': 'Unimaginative Lie', 'puke+yawn': 'Aggressively Mediocre', 'money+yawn': 'Quiet Luxury', 'trash+yawn': 'Room Temperature Take',
+  'crylaugh+yawn': 'The Pity Laugh', 'fire+yawn': 'The Slow Burn', 'sideeye+yawn': 'The Lurker', 'popcorn+yawn': 'The Side Character',
+  'chartdown+yawn': 'Dead Cat Bounce', 'robot+yawn': 'Default Settings',
+  'cap+puke': 'The Sleazeball', 'cap+money': 'The Crypto Bro', 'cap+trash': 'The Fraud', 'cap+crylaugh': 'Tall Tale',
+  'cap+fire': "Fool's Gold", 'cap+sideeye': 'The Suspect', 'cap+popcorn': 'Reality TV Star', 'cap+chartdown': 'Caught In 4K', 'cap+robot': 'The Hallucination',
+  'money+puke': 'The Flex Offender', 'puke+trash': 'Barf Bag', 'crylaugh+puke': "So Bad It's Good", 'fire+puke': 'The Spicy Cringe',
+  'puke+sideeye': 'The HR Nightmare', 'popcorn+puke': 'The Hate-Watch', 'chartdown+puke': 'The Meltdown', 'puke+robot': 'The Uncanny Valley',
+  'money+trash': 'Rich Trash', 'crylaugh+money': 'The High Stakes Bit', 'fire+money': 'The Beautiful Disaster', 'money+sideeye': 'Menace to Society',
+  'money+popcorn': 'The Chaos Investor', 'chartdown+money': 'The Bankruptcy', 'money+robot': 'The Paid Actor',
+  'crylaugh+trash': 'The High-Tier Shitpost', 'fire+trash': 'Dumpster Fire', 'sideeye+trash': 'The Red Flag', 'popcorn+trash': 'The Trash Collector',
+  'chartdown+trash': 'Rock Bottom', 'robot+trash': 'The Slop Engine',
+  'crylaugh+fire': 'The Roast Master', 'crylaugh+sideeye': 'The Unhinged Laugh', 'crylaugh+popcorn': 'The Heckler', 'chartdown+crylaugh': 'The Flop Era',
+  'crylaugh+robot': 'Comedy Algorithm',
+  'fire+sideeye': 'The Threat', 'fire+popcorn': 'The Pyromaniac', 'chartdown+fire': 'The Icarus', 'fire+robot': 'The Deepfake',
+  'popcorn+sideeye': 'Disaster Tourist', 'chartdown+sideeye': 'Throwing the Game', 'robot+sideeye': 'The Narc',
+  'chartdown+popcorn': 'Box Office Bomb', 'popcorn+robot': 'The Content Farm', 'chartdown+robot': 'System Error'
+};
+var RECEIVER_TRIPLETS = {
+  'cap+chef+robot': 'The Ghost Kitchen', 'bullseye+chartdown+puke': 'The Whistleblower', 'clown+handshake+trash': 'The Circus Committee',
+  'chef+money+sideeye': 'Street Pharmacist', 'cap+clown+popcorn': 'The Clout Parasite', 'puke+robot+yawn': 'Corporate Slop',
+  'cap+chartdown+money': 'The Fyre Festival', 'crylaugh+puke+trash': 'The Toxic Shitpost', 'money+popcorn+sideeye': 'The Hedge Fund Manager',
+  'fire+robot+trash': 'Automated Dumpster Fire', 'crylaugh+fire+sideeye': 'Cruel Intentions', 'bullseye+robot+yawn': 'The NPC Protocol'
+};
+var GIVER_COMBOS = {
+  'bullseye+handshake': "People-Pleaser's Fact Check", 'bullseye+chef': 'Litigator', 'bullseye+clown': 'Ackshually Heckler', 'bullseye+yawn': 'Clipboard Killjoy',
+  'bullseye+cap': 'Burden of Proof Guy', 'bullseye+puke': 'Cringe Calipers', 'bullseye+money': 'Bylaw Reporter', 'bullseye+trash': 'Nitpicky',
+  'bullseye+crylaugh': 'The Laugh Meter', 'bullseye+sideeye': 'Receipt Collector', 'bullseye+popcorn': 'Court Stenographer', 'bullseye+chartdown': 'The Coroner',
+  'bullseye+robot': 'CAPTCHA: Skill Issue',
+  'chef+handshake': 'Focus Group Zombie', 'clown+handshake': 'Hand-Crafted Coattail', 'handshake+yawn': 'Beige Personified', 'handshake+puke': 'Sanctimony Sponge',
+  'crylaugh+handshake': 'Canned Applause', 'fire+handshake': 'Parasocial', 'handshake+popcorn': 'Railbird', 'handshake+robot': 'Doppler Ganger',
+  'chef+clown': 'Review Bomber', 'chef+yawn': 'Creative Director Of Nothing', 'cap+chef': 'Counterfeiter', 'chef+puke': 'Karen Customer',
+  'chef+money': 'Red-Tape Gourmet', 'chef+trash': 'One-Star Oracle', 'chef+robot': 'Whiz Cuisine',
+  'clown+yawn': 'Vibe Sniper', 'cap+clown': 'The Contrarian', 'clown+puke': 'Bitter Beer Face', 'clown+trash': 'Comment Section Legend',
+  'clown+sideeye': 'Burn Book', 'clown+popcorn': 'The Shit-Stirrer', 'chartdown+clown': 'Gallows Comic', 'clown+robot': 'Smack Talker',
+  'cap+yawn': 'Cynical', 'puke+yawn': 'Allergic To Fun', 'money+yawn': 'Municipal Buzzkill', 'trash+yawn': 'Black Hole Signatory',
+  'fire+yawn': "Everything's Mid", 'chartdown+yawn': 'Doomscroller', 'robot+yawn': 'Cold Mapper',
+  'cap+puke': 'Purity Truther', 'cap+sideeye': 'The Witch Hunt', 'cap+popcorn': 'Tinfoil Productions', 'cap+chartdown': 'Market Crash Prophet', 'cap+robot': 'The Deepfake Detective',
+  'money+puke': 'Church Lady Energy', 'puke+trash': 'Disliker', 'puke+sideeye': 'Moral Surveillance Van', 'puke+robot': 'Robotripper',
+  'money+trash': 'Neighborhood Facebook Admin', 'money+sideeye': 'Criminologist', 'money+popcorn': 'Concern Troll', 'money+robot': 'Humanity Checkpoint',
+  'crylaugh+trash': 'Spite Viewer', 'fire+trash': 'Polarized', 'sideeye+trash': 'Screenshot Gremlin', 'chartdown+trash': 'Rapture Rating', 'robot+trash': 'Legacy Hardware',
+  'crylaugh+fire': 'Engagement Farmer', 'crylaugh+popcorn': 'Must-See Comedy', 'crylaugh+robot': 'Synthetic Enthusiasm',
+  'fire+sideeye': 'Paranoid Pyro', 'fire+popcorn': 'Chaos Influencer', 'fire+robot': 'Pulse Checker',
+  'popcorn+sideeye': 'Group Chat Forensics', 'chartdown+sideeye': 'Disaster Archivist', 'robot+sideeye': 'Turing Examiner',
+  'chartdown+popcorn': 'Vulture Capitalist', 'popcorn+robot': 'CSI: Discord', 'chartdown+robot': 'Ctrl-Alt-Deceased'
+};
+var GIVER_TRIPLETS = {
+  'bullseye+popcorn+sideeye': 'Discovery Channel Lawyer', 'clown+popcorn+trash': 'Geekshow', 'cap+robot+sideeye': 'An Eye For Talent',
+  'bullseye+cap+chartdown': 'Black Box Recorder', 'chef+puke+trash': 'Rotten Tomato', 'crylaugh+fire+handshake': 'Borrowed Personality',
+  'cap+money+sideeye': 'HOA Conspiracy Board', 'chartdown+trash+yawn': 'The Great Filter', 'cap+clown+popcorn': 'Crisis Actor',
+  'bullseye+robot+sideeye': 'Falsifiably Weary', 'money+puke+sideeye': 'Vice Detective', 'chartdown+robot+trash': 'Auto-Sloppy-Copy'
+};
+
 // from raw stats -> the titles you hold + your worn calltag (highest)
 function computeIdentity(stats) {
-  var recvTitles = [], giveTitles = [], totalPrestige = 0;
-  (stats || []).forEach(function (s) {
-    var ri = levelIdx(s.recv);
-    if (ri >= 0 && RECEIVER_LADDERS[s.badge]) { var rp = Math.floor(s.recv / 50); recvTitles.push({ badge: s.badge, label: RECEIVER_LADDERS[s.badge][ri], idx: ri, count: s.recv, axis: 'recv', prestige: rp }); totalPrestige += rp; }
-    var gi = levelIdx(s.give);
-    if (gi >= 0 && GIVER_LADDERS[s.badge]) { var gp = Math.floor(s.give / 50); giveTitles.push({ badge: s.badge, label: GIVER_LADDERS[s.badge][gi], idx: gi, count: s.give, axis: 'give', prestige: gp }); totalPrestige += gp; }
+  var recv = {}, give = {};
+  (stats || []).forEach(function (s) { recv[s.badge] = s.recv; give[s.badge] = s.give; });
+  var recvTitles = [], giveTitles = [], comboTitles = [], totalPrestige = 0;
+
+  function singles(counts, ladders, axis, out) {
+    Object.keys(counts).forEach(function (b) {
+      var c = counts[b], i = levelIdx(c);
+      if (i >= 0 && ladders[b]) { var pr = Math.floor(c / 50); out.push({ badge: b, label: ladders[b][i], idx: i, count: c, axis: axis, tier: 1, prestige: pr }); totalPrestige += pr; }
+    });
+  }
+  singles(recv, RECEIVER_LADDERS, 'recv', recvTitles);
+  singles(give, GIVER_LADDERS, 'give', giveTitles);
+
+  // a badge qualifies for combos at Lv10+ (count >= 10) on that axis
+  function combos(counts, pairMap, tripMap, axis) {
+    var q = Object.keys(counts).filter(function (b) { return counts[b] >= 10; }).sort();
+    var i, j, k;
+    for (i = 0; i < q.length; i++) for (j = i + 1; j < q.length; j++) {
+      var pk = q[i] + '+' + q[j];
+      if (pairMap[pk]) comboTitles.push({ label: pairMap[pk], axis: axis, tier: 2, badges: [q[i], q[j]], strength: Math.min(counts[q[i]], counts[q[j]]) });
+    }
+    for (i = 0; i < q.length; i++) for (j = i + 1; j < q.length; j++) for (k = j + 1; k < q.length; k++) {
+      var tk = q[i] + '+' + q[j] + '+' + q[k];
+      if (tripMap[tk]) comboTitles.push({ label: tripMap[tk], axis: axis, tier: 3, badges: [q[i], q[j], q[k]], strength: Math.min(counts[q[i]], counts[q[j]], counts[q[k]]) });
+    }
+  }
+  combos(recv, RECEIVER_COMBOS, RECEIVER_TRIPLETS, 'recv');
+  combos(give, GIVER_COMBOS, GIVER_TRIPLETS, 'give');
+
+  // calltag: highest tier (triplet > combo > single), then prestige, rung, strength
+  var all = recvTitles.concat(giveTitles).concat(comboTitles).slice().sort(function (a, b) {
+    return ((b.tier || 1) - (a.tier || 1)) || ((b.prestige || 0) - (a.prestige || 0)) || ((b.idx || 0) - (a.idx || 0)) || ((b.strength || b.count || 0) - (a.strength || a.count || 0));
   });
-  // prestige outranks rung outranks count; receiver wins final ties
-  var all = recvTitles.concat(giveTitles).sort(function (a, b) {
-    return (b.prestige - a.prestige) || (b.idx - a.idx) || (b.count - a.count) || ((a.axis === 'recv' ? 0 : 1) - (b.axis === 'recv' ? 0 : 1));
-  });
-  return { recvTitles: recvTitles, giveTitles: giveTitles, totalPrestige: totalPrestige, calltag: all.length ? all[0].label : null, calltagPrestige: all.length ? all[0].prestige : 0 };
+  return { recvTitles: recvTitles, giveTitles: giveTitles, comboTitles: comboTitles, totalPrestige: totalPrestige, calltag: all.length ? all[0].label : null, calltagPrestige: all.length ? (all[0].prestige || 0) : 0 };
 }
 
 // gold ★ per completed prestige cycle (50 of a badge), capped for display
@@ -169,9 +254,18 @@ function dossierHtml() {
   var html = '<div class="panel dossier"><div class="label">🪪 YOUR DOSSIER</div>';
   html += '<div class="dz-calltag">WORN: <b>' + escapeHtml(worn) + '</b>' + stars(id.calltagPrestige) + '</div>';
   var seen = {}, opts = '<option value="__auto__"' + (chosen === '__auto__' ? ' selected' : '') + '>★ Auto (highest)</option>';
-  recv.concat(give).forEach(function (t) { if (seen[t.label]) return; seen[t.label] = 1; opts += '<option value="' + escapeHtml(t.label) + '"' + (chosen === t.label ? ' selected' : '') + '>' + escapeHtml(t.label) + '</option>'; });
+  (id.comboTitles || []).concat(recv).concat(give).forEach(function (t) { if (seen[t.label]) return; seen[t.label] = 1; opts += '<option value="' + escapeHtml(t.label) + '"' + (chosen === t.label ? ' selected' : '') + '>' + escapeHtml(t.label) + '</option>'; });
   opts += '<option value="__none__"' + (chosen === '__none__' ? ' selected' : '') + '>— no label —</option>';
   html += '<div class="dz-pick">WEAR: <select id="calltag-sel">' + opts + '</select></div>';
+  if (id.comboTitles && id.comboTitles.length) {
+    html += '<div class="dz-sub">COMBOS UNLOCKED</div>';
+    id.comboTitles.slice().sort(function (a, b) { return (b.tier - a.tier) || (b.strength - a.strength); }).forEach(function (c) {
+      var bs = c.badges.map(function (b) { return badgeEmoji(b); }).join('');
+      html += '<div class="dz-row"><span class="dz-badge dz-combobadge">' + bs + '</span>' +
+        '<span class="dz-title dz-combotitle">' + escapeHtml(c.label) + '</span>' +
+        '<span class="dz-prog muted">' + (c.tier === 3 ? 'TRIPLET' : 'combo') + ' · ' + (c.axis === 'recv' ? 'earned' : 'projected') + '</span></div>';
+    });
+  }
   if (recv.length) html += '<div class="dz-sub">WHAT YOUR PROMPTS EARN</div>' + recv.map(function (t) { return row(t, 'recv'); }).join('');
   if (give.length) html += '<div class="dz-sub">THE PROJECTION — what you inflict</div>' + give.map(function (t) { return row(t, 'give'); }).join('');
   return html + '</div>';

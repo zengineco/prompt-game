@@ -361,6 +361,8 @@ button.primary:hover { background: #5cff88; }
 .dz-pick { margin: 8px 0 4px; font-size: 12px; letter-spacing: 1px; color: var(--phosphor-dim); }
 .dz-pick select { font-size: 14px; padding: 6px 10px; margin-left: 6px; }
 .prestige-star { color: #ffd84d; text-shadow: 0 0 6px rgba(255, 216, 77, 0.55); letter-spacing: -1px; }
+.dz-combotitle { color: #ffd84d; text-shadow: 0 0 6px rgba(255, 216, 77, 0.35); }
+.dz-combobadge { font-size: 15px; letter-spacing: -3px; }
 
 /* Palette is a top bar; responses fill a 3-wide grid (all 9 cells: 8 players + bot) */
 @media (min-width: 680px) {
