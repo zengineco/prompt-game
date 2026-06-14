@@ -138,7 +138,10 @@ body {
   padding-bottom: 10px;
   letter-spacing: 2px;
 }
-.topbar .title { font-size: 20px; }
+.topbar .title { font-size: 26px; letter-spacing: 6px; }
+/* v20 main screen — matrix rain behind the UI; kill the dev boot text */
+#rain { position: absolute; inset: 0; z-index: 0; opacity: 0.55; pointer-events: none; }
+.boot, .link-status { display: none !important; }
 .zg-monogram {
   font-family: 'VT323', monospace;
   font-size: 26px;

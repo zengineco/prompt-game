@@ -387,6 +387,33 @@ function boot() {
   } catch (err) { console.error('boot:', err); }
 }
 
+// ── Matrix digital rain behind the UI (the front-door vibe) ──────────────────
+function startRain() {
+  var cv = document.getElementById('rain'); if (!cv) return;
+  var ctx = cv.getContext('2d'); if (!ctx) return;
+  var fontSize = 14, drops = [], cols = 0;
+  function resize() {
+    var p = cv.parentElement || document.body;
+    cv.width = p.clientWidth; cv.height = p.clientHeight;
+    cols = Math.ceil(cv.width / fontSize);
+    drops = []; for (var i = 0; i < cols; i++) drops[i] = Math.random() * -60;
+  }
+  resize(); window.addEventListener('resize', resize);
+  var glyphs = 'PROMPT0123456789アイウエオカキク#%&<>=*+/$'.split('');
+  function draw() {
+    ctx.fillStyle = 'rgba(5,8,5,0.10)'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.font = fontSize + "px 'Share Tech Mono', monospace";
+    for (var i = 0; i < cols; i++) {
+      var y = drops[i] * fontSize;
+      ctx.fillStyle = Math.random() > 0.985 ? '#9dffbe' : '#1f9c43';
+      ctx.fillText(glyphs[Math.floor(Math.random() * glyphs.length)], i * fontSize, y);
+      if (y > cv.height && Math.random() > 0.975) drops[i] = 0;
+      drops[i] += 0.6;
+    }
+  }
+  setInterval(draw, 55);
+}
+
 // ── Edge Function caller (the referee) ─────────────────────────────────────
 async function callFn(action, payload) {
   var body = Object.assign({ action: action, instance_id: STATE.instanceId }, payload || {});
@@ -679,7 +706,6 @@ function renderLobby() {
     '<div class="roster">' + (roster || '<span class="muted">waiting for players...</span>') + '</div></div>' +
     '<div class="prompt-line"><span class="arrow">&gt;</span> DECK:</div>' +
     '<div class="input-row"><select id="cat-select">' + opts + '</select>' +
-    '<select id="rounds-select"><option value="3">3 rounds</option><option value="5" selected>5 rounds</option><option value="7">7 rounds</option></select>' +
     '<button id="start-btn"' + (canStart ? '' : ' disabled') + '>START</button></div>' +
     (canStart ? '' : '<div class="muted">need 2+ players to start</div>') +
     '<div class="prompt-line"><span class="arrow">&gt;</span> OR DROP INTO A LIVE TABLE:</div>' +
@@ -688,8 +714,7 @@ function renderLobby() {
     leaderboardHtml();
   el('cat-select').addEventListener('change', function (e) { STATE.category = e.target.value; });
   el('start-btn').addEventListener('click', function () {
-    var rounds = parseInt(el('rounds-select').value) || 5;
-    callFn('start', { category: STATE.category, rounds: rounds });
+    callFn('start', { category: STATE.category, rounds: 5 });
   });
   el('findgame-btn').addEventListener('click', function () { browseTables(el('findgame-btn')); });
   wireDossier();
@@ -1217,7 +1242,7 @@ function paintTransmission() {
 
 // ── BOOT ORDER ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function () {
-  boot();
+  startRain();
   init().catch(function (err) {
     console.error('init:', err);
     var msg = (err && err.message) ? err.message : String(err);
