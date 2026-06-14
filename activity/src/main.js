@@ -495,6 +495,69 @@ async function leavePublic() {
   await switchSession(STATE.homeInstanceId, res && res.session_id);
 }
 
+// ── v20 TABLE BROWSER — infinite tables: drop in, rack up points, leave anytime ──
+function browseTables(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'loading tables…'; }
+  callFn('listtables', {}).then(function (res) {
+    STATE.tablesList = (res && res.tables) || [];
+    renderTableBrowser();
+  }).catch(function (e) { console.error('listtables:', e); if (btn) { btn.disabled = false; btn.textContent = '🌐 BROWSE TABLES'; } });
+}
+function joinTableNow(iid, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'joining…'; }
+  callFn('jointable', { instance_id: iid, discord_id: STATE.user.id, username: STATE.user.username })
+    .then(function (res) { if (res && res.session_id) switchSession(res.instance_id, res.session_id); })
+    .catch(function (e) { console.error('jointable:', e); if (btn) { btn.disabled = false; btn.textContent = 'JOIN'; } });
+}
+function renderTableBrowser() {
+  var rows = (STATE.tablesList || []).map(function (t) {
+    var full = t.count >= 8, live = t.phase !== 'lobby';
+    return '<div class="table-row"><span class="table-name">🎲 ' + escapeHtml(t.name) + '</span>' +
+      '<span class="table-meta muted">' + t.count + '/8 · ' + (live ? 'LIVE' : 'open') + '</span>' +
+      '<button class="join-table-btn" data-iid="' + escapeHtml(t.instance_id) + '"' + (full ? ' disabled' : '') + '>' + (full ? 'FULL' : 'JOIN') + '</button></div>';
+  }).join('') || '<div class="muted">spinning up tables…</div>';
+  el('game').innerHTML =
+    '<div class="panel"><div class="label">&gt;&gt; TABLES — grab any open seat</div>' +
+    '<div class="muted">tables never end. jump in, rack up points, leave whenever.</div></div>' +
+    '<div class="tables">' + rows + '</div>' +
+    '<div id="host-result"></div>' +
+    '<div class="prompt-line"><span class="arrow">&gt;</span> GOT AN INVITE CODE?</div>' +
+    '<div class="input-row"><input id="code-input" type="text" maxlength="6" placeholder="6-char code" autocomplete="off" />' +
+    '<button id="joincode-btn">JOIN</button></div>' +
+    '<div class="submit-note" id="code-note"></div>' +
+    '<div class="row-actions"><button id="host-btn" class="primary">➕ HOST A PRIVATE TABLE</button> ' +
+    '<button id="refresh-tables-btn" class="ghost">⟳ refresh</button> ' +
+    '<button id="back-lobby-btn" class="ghost">◂ back</button></div>';
+  Array.prototype.forEach.call(document.querySelectorAll('.join-table-btn'), function (b) {
+    b.addEventListener('click', function () { joinTableNow(b.getAttribute('data-iid'), b); });
+  });
+  el('joincode-btn').addEventListener('click', function () {
+    var code = (el('code-input').value || '').trim();
+    if (!code) return;
+    el('joincode-btn').disabled = true;
+    callFn('jointablecode', { code: code, discord_id: STATE.user.id, username: STATE.user.username })
+      .then(function (res) {
+        if (res && res.session_id) switchSession(res.instance_id, res.session_id);
+        else { el('code-note').textContent = '🚫 no table with that code'; el('code-note').className = 'submit-note blocked'; el('joincode-btn').disabled = false; }
+      })
+      .catch(function () { el('code-note').textContent = '🚫 no table with that code'; el('code-note').className = 'submit-note blocked'; el('joincode-btn').disabled = false; });
+  });
+  el('host-btn').addEventListener('click', function () {
+    el('host-btn').disabled = true; el('host-btn').textContent = 'creating…';
+    callFn('hosttable', { discord_id: STATE.user.id, username: STATE.user.username })
+      .then(function (res) {
+        if (res && res.code) {
+          el('host-result').innerHTML = '<div class="panel"><div class="label">YOUR PRIVATE TABLE IS OPEN</div>' +
+            '<div class="code-display">CODE: <b>' + escapeHtml(res.code) + '</b></div><div class="muted">share it with your crew — taking you in…</div></div>';
+          setTimeout(function () { switchSession(res.instance_id, res.session_id); }, 1600);
+        }
+      })
+      .catch(function (e) { console.error('hosttable:', e); el('host-btn').disabled = false; el('host-btn').textContent = '➕ HOST A PRIVATE TABLE'; });
+  });
+  el('refresh-tables-btn').addEventListener('click', function () { browseTables(el('refresh-tables-btn')); });
+  el('back-lobby-btn').addEventListener('click', function () { render(); });
+}
+
 // ── Realtime: any change to this session → refetch + render ────────────────
 function subscribe() {
   if (!STATE.sessionId) return;
@@ -619,8 +682,8 @@ function renderLobby() {
     '<select id="rounds-select"><option value="3">3 rounds</option><option value="5" selected>5 rounds</option><option value="7">7 rounds</option></select>' +
     '<button id="start-btn"' + (canStart ? '' : ' disabled') + '>START</button></div>' +
     (canStart ? '' : '<div class="muted">need 2+ players to start</div>') +
-    '<div class="prompt-line"><span class="arrow">&gt;</span> NO FRIENDS ONLINE?</div>' +
-    '<div class="row-actions"><button id="findgame-btn" class="ghost">🌐 FIND A PUBLIC GAME</button></div>' +
+    '<div class="prompt-line"><span class="arrow">&gt;</span> OR DROP INTO A LIVE TABLE:</div>' +
+    '<div class="row-actions"><button id="findgame-btn" class="ghost">🌐 BROWSE TABLES</button></div>' +
     dossierHtml() +
     leaderboardHtml();
   el('cat-select').addEventListener('change', function (e) { STATE.category = e.target.value; });
@@ -628,7 +691,7 @@ function renderLobby() {
     var rounds = parseInt(el('rounds-select').value) || 5;
     callFn('start', { category: STATE.category, rounds: rounds });
   });
-  el('findgame-btn').addEventListener('click', function () { findGame(el('findgame-btn')); });
+  el('findgame-btn').addEventListener('click', function () { browseTables(el('findgame-btn')); });
   wireDossier();
   wireLeaderboardTabs();
 }
@@ -1050,13 +1113,13 @@ function renderGameOver() {
     '</div>' +
     '<div class="results">' + standings + '</div>' +
     '<div class="row-actions"><button id="again-btn">▸ PLAY AGAIN</button>' +
-    '<button id="findgame-btn" class="ghost">🌐 FIND ANOTHER GAME</button>' +
+    '<button id="findgame-btn" class="ghost">🌐 BROWSE TABLES</button>' +
     '<button id="sharecard-btn" class="ghost">📸 SHARE CARD</button></div>' +
     dossierHtml() +
     '<div class="share-holder" id="share-holder"></div>';
 
   el('again-btn').addEventListener('click', function () { callFn('reset', {}); });
-  el('findgame-btn').addEventListener('click', function () { findGame(el('findgame-btn')); });
+  el('findgame-btn').addEventListener('click', function () { browseTables(el('findgame-btn')); });
   el('sharecard-btn').addEventListener('click', makeShareCard);
   wireDossier();
 }
@@ -1080,7 +1143,10 @@ function renderScoreboard() {
     mine = '<div class="my-rank">RANK: <b>' + escapeHtml(STATE.myProfile.rank || 'UNRANKED') + '</b>' + tag +
       ' · ' + (STATE.myProfile.prestige || 0) + ' prestige' + foolStr + '</div>';
   }
-  el('scoreboard').innerHTML = (board ? '<div class="label">SCOREBOARD</div>' + board : '') + mine;
+  var inTable = STATE.session && STATE.session.is_public && STATE.session.phase !== 'ended' && STATE.session.phase !== 'lobby';
+  var leaveBtn = inTable ? '<div class="row-actions"><button id="leave-table-btn" class="ghost">◂ leave table</button></div>' : '';
+  el('scoreboard').innerHTML = (board ? '<div class="label">SCOREBOARD</div>' + board : '') + mine + leaveBtn;
+  if (el('leave-table-btn')) el('leave-table-btn').addEventListener('click', function () { var b = el('leave-table-btn'); b.disabled = true; b.textContent = 'leaving…'; leavePublic(); });
 }
 
 // Leaderboard — two views: GLOBAL (all-time) and THIS ROOM (who you're with now).

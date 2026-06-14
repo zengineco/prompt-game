@@ -364,6 +364,16 @@ button.primary:hover { background: #5cff88; }
 .dz-combotitle { color: #ffd84d; text-shadow: 0 0 6px rgba(255, 216, 77, 0.35); }
 .dz-combobadge { font-size: 15px; letter-spacing: -3px; }
 
+/* ── v20 table browser ── */
+.tables { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.table-row { display: flex; align-items: center; gap: 12px; border: 1px solid var(--phosphor-dim); background: var(--bg-panel); padding: 10px 14px; }
+.table-name { flex: 1; font-size: 16px; }
+.table-meta { font-size: 13px; white-space: nowrap; }
+.join-table-btn { padding: 6px 18px; }
+.code-display { font-size: 22px; margin: 10px 0; letter-spacing: 3px; }
+#code-input { flex: 1; background: transparent; border: 1px solid var(--phosphor-dim); color: var(--phosphor); font-family: inherit; font-size: 17px; padding: 12px 14px; text-shadow: var(--glow); outline: none; text-transform: uppercase; letter-spacing: 3px; }
+#code-input:focus { border-color: var(--phosphor); }
+
 /* Palette is a top bar; responses fill a 3-wide grid (all 9 cells: 8 players + bot) */
 @media (min-width: 680px) {
   .board-cards { grid-template-columns: repeat(3, 1fr); }
