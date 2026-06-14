@@ -160,11 +160,29 @@ function dossierHtml() {
   }
   function bySort(a, b) { return (b.idx - a.idx) || (b.count - a.count); }
   var recv = id.recvTitles.slice().sort(bySort), give = id.giveTitles.slice().sort(bySort);
+  var chosen = (STATE.myProfile && STATE.myProfile.chosen_title) || '__auto__';
+  var worn = chosen === '__none__' ? '(hidden)' : ((STATE.myProfile && STATE.myProfile.calltag) || id.calltag || '—');
   var html = '<div class="panel dossier"><div class="label">🪪 YOUR DOSSIER</div>';
-  if (id.calltag) html += '<div class="dz-calltag">WORN: <b>' + escapeHtml(id.calltag) + '</b></div>';
+  html += '<div class="dz-calltag">WORN: <b>' + escapeHtml(worn) + '</b></div>';
+  var seen = {}, opts = '<option value="__auto__"' + (chosen === '__auto__' ? ' selected' : '') + '>★ Auto (highest)</option>';
+  recv.concat(give).forEach(function (t) { if (seen[t.label]) return; seen[t.label] = 1; opts += '<option value="' + escapeHtml(t.label) + '"' + (chosen === t.label ? ' selected' : '') + '>' + escapeHtml(t.label) + '</option>'; });
+  opts += '<option value="__none__"' + (chosen === '__none__' ? ' selected' : '') + '>— no label —</option>';
+  html += '<div class="dz-pick">WEAR: <select id="calltag-sel">' + opts + '</select></div>';
   if (recv.length) html += '<div class="dz-sub">WHAT YOUR PROMPTS EARN</div>' + recv.map(function (t) { return row(t, 'recv'); }).join('');
   if (give.length) html += '<div class="dz-sub">THE PROJECTION — what you inflict</div>' + give.map(function (t) { return row(t, 'give'); }).join('');
   return html + '</div>';
+}
+// wire the calltag picker (auto / a specific earned title / no label)
+function wireDossier() {
+  var sel = el('calltag-sel');
+  if (!sel) return;
+  sel.addEventListener('change', function () {
+    var v = sel.value, uid = STATE.user.id, sb = STATE.supabase;
+    var args = v === '__auto__' ? { p_discord: uid, p_calltag: (STATE.myIdentity && STATE.myIdentity.calltag) || null, p_chosen: null }
+      : v === '__none__' ? { p_discord: uid, p_calltag: null, p_chosen: '__none__' }
+      : { p_discord: uid, p_calltag: v, p_chosen: v };
+    sb.rpc('prompt_pick_calltag', args).then(function () { refresh(); });
+  });
 }
 
 // fake "decoding" fragments the terminal flickers while a player is still typing
@@ -342,9 +360,6 @@ function initGuest() {
   STATE.user = { id: 'guest-' + rng, username: 'GUEST-' + rng.toUpperCase() };
   STATE.instanceId = new URLSearchParams(window.location.search).get('room') || 'browser-demo';
   setStatus('players: GUEST MODE (' + STATE.user.username + ') — room "' + STATE.instanceId + '"');
-  // guest-only debug hooks (no-op in Discord) for local verification
-  window.__uid = STATE.user.id;
-  window.__prompt = { computeIdentity: computeIdentity, dossierHtml: dossierHtml, STATE: STATE };
 }
 
 async function joinSession() {
@@ -431,7 +446,9 @@ async function refresh() {
     var bsr = await sb.from('prompt_badge_stats').select('badge,recv,give').eq('discord_id', STATE.user.id);
     STATE.badgeStats = bsr.data || [];
     STATE.myIdentity = computeIdentity(STATE.badgeStats);
-    if (STATE.myIdentity.calltag && STATE.myProfile && STATE.myProfile.calltag !== STATE.myIdentity.calltag) {
+    // auto-wear the highest ONLY until the player has made a choice (chosen_title set)
+    var chosenT = STATE.myProfile && STATE.myProfile.chosen_title;
+    if (!chosenT && STATE.myIdentity.calltag && STATE.myProfile && STATE.myProfile.calltag !== STATE.myIdentity.calltag) {
       sb.rpc('prompt_set_calltag', { p_discord: STATE.user.id, p_calltag: STATE.myIdentity.calltag });
     }
     var lb = await sb.from('prompt_profiles').select('username,prestige,rank,calltag').order('prestige', { ascending: false }).limit(8);
@@ -510,11 +527,7 @@ function renderLobby() {
     callFn('start', { category: STATE.category, rounds: rounds });
   });
   el('findgame-btn').addEventListener('click', function () { findGame(el('findgame-btn')); });
-  if (el('title-sel')) {
-    el('title-sel').addEventListener('change', function (e) {
-      STATE.supabase.rpc('prompt_set_title', { p_discord: STATE.user.id, p_title_key: e.target.value }).then(function () { refresh(); });
-    });
-  }
+  wireDossier();
   wireLeaderboardTabs();
 }
 
@@ -943,6 +956,7 @@ function renderGameOver() {
   el('again-btn').addEventListener('click', function () { callFn('reset', {}); });
   el('findgame-btn').addEventListener('click', function () { findGame(el('findgame-btn')); });
   el('sharecard-btn').addEventListener('click', makeShareCard);
+  wireDossier();
 }
 
 function renderScoreboard() {

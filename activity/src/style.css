@@ -305,10 +305,10 @@ button.ghost:hover { background: rgba(31, 156, 67, 0.12); }
   border: 1px solid var(--phosphor-dim); background: var(--bg-panel);
 }
 .badge-btn {
-  font-size: 24px; line-height: 1; width: 44px; height: 44px; padding: 0;
+  font-size: 30px; line-height: 1; width: 56px; height: 56px; padding: 0;
   display: flex; align-items: center; justify-content: center;
   background: rgba(0, 0, 0, 0.35); border: 1px solid var(--phosphor-dim);
-  border-radius: 6px; cursor: grab; letter-spacing: 0;
+  border-radius: 8px; cursor: grab; letter-spacing: 0;
   transition: transform .08s, box-shadow .08s, background .08s;
   touch-action: manipulation; -webkit-user-select: none; user-select: none;
 }
@@ -358,26 +358,13 @@ button.primary:hover { background: #5cff88; }
 .dz-badge { font-size: 20px; width: 26px; text-align: center; flex: 0 0 auto; }
 .dz-title { font-size: 15px; flex: 0 0 auto; min-width: 132px; }
 .dz-prog { font-size: 12px; }
+.dz-pick { margin: 8px 0 4px; font-size: 12px; letter-spacing: 1px; color: var(--phosphor-dim); }
+.dz-pick select { font-size: 14px; padding: 6px 10px; margin-left: 6px; }
 
-/* Desktop: the literal tic-tac-toe board — palette in the dead-center cell */
-@media (min-width: 760px) {
-  .board:not(.board-locked) {
-    display: grid; grid-template-columns: repeat(3, 1fr);
-    grid-auto-rows: minmax(96px, auto); gap: 8px;
-  }
-  .board:not(.board-locked) .palette {
-    position: static; margin: 0; grid-column: 2; grid-row: 2;
-    align-content: center;
-  }
-  .board:not(.board-locked) .board-cards { display: contents; }
-  .board:not(.board-locked) .board-cards .vcard:nth-child(1) { grid-area: 1 / 1; }
-  .board:not(.board-locked) .board-cards .vcard:nth-child(2) { grid-area: 1 / 2; }
-  .board:not(.board-locked) .board-cards .vcard:nth-child(3) { grid-area: 1 / 3; }
-  .board:not(.board-locked) .board-cards .vcard:nth-child(4) { grid-area: 2 / 1; }
-  .board:not(.board-locked) .board-cards .vcard:nth-child(5) { grid-area: 2 / 3; }
-  .board:not(.board-locked) .board-cards .vcard:nth-child(6) { grid-area: 3 / 1; }
-  .board:not(.board-locked) .board-cards .vcard:nth-child(7) { grid-area: 3 / 2; }
-  .board:not(.board-locked) .board-cards .vcard:nth-child(8) { grid-area: 3 / 3; }
+/* Palette is a top bar; responses fill a 3-wide grid (all 9 cells: 8 players + bot) */
+@media (min-width: 680px) {
+  .board-cards { grid-template-columns: repeat(3, 1fr); }
+  .vcard { min-height: 112px; }
 }
 
 /* Results */
