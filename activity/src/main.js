@@ -189,11 +189,30 @@ var GIVER_TRIPLETS = {
   'bullseye+robot+sideeye': 'Falsifiably Weary', 'money+puke+sideeye': 'Vice Detective', 'chartdown+robot+trash': 'Auto-Sloppy-Copy'
 };
 
+// CROSSES (R×G) — receive one badge a lot AND give another a lot. Key: "recv>give". (CROSS_TITLES.md)
+var RECV_GIVE_CROSSES = {
+  'bullseye>puke':'Precision Hater','bullseye>trash':'Peak Ruiner','bullseye>yawn':'Human Buzzkill','bullseye>sideeye':'Conspiracy Auditor','bullseye>cap':'Truth Truther','bullseye>chartdown':'Doom Calculator',
+  'handshake>puke':'Selective Empath','handshake>trash':'Two-Faced Yelp','handshake>sideeye':'Friendly Narc','handshake>chartdown':'Anxiety Broker','handshake>cap':'Agreement Hoarder',
+  'chef>yawn':'Burnt-Out Genius','chef>puke':'Flexing Taste-Tester','chef>trash':'No-Chill Stove-Top','chef>sideeye':'Recipe Gatekeeper','chef>robot':'Artisanal AI Detector',
+  'clown>puke':'Self-Hating Entertainer','clown>sideeye':'Court Jester CIA','clown>chartdown':'Doom Mascot','clown>trash':'Professional Heckler','clown>cap':'Irony Addict',
+  'yawn>fire':'Forced Hype Man','yawn>crylaugh':'Laugh Track Operator','yawn>popcorn':'Spectator Vegetable','yawn>puke':'Disgusted Furniture','yawn>bullseye':'Spreadsheet Comedian',
+  'cap>bullseye':'False Prophet','cap>sideeye':'Tin-Foil Detective','cap>robot':'Synthetic Skeptic','cap>chartdown':'Apocalypse Influencer',
+  'puke>handshake':'Toxic Positivity','puke>crylaugh':'Cringe Tourist','puke>popcorn':'Carnage Critic','puke>fire':'Rage Reactor','puke>chef':'Food Critic Energy',
+  'money>handshake':'Cool Mom','money>sideeye':'Self Snitch','money>chartdown':'Bankruptcy Oracle','money>puke':'Moral Hangover',
+  'trash>handshake':'Polite Hater','trash>crylaugh':'Bully With A Podcast','trash>fire':'Chaos Reviewer','trash>popcorn':'Dumpster Tourist','trash>sideeye':'Grievance Archivist',
+  'crylaugh>puke':'Pageant Judge','crylaugh>chartdown':'Doom Comic','crylaugh>sideeye':'Suspicious Giggler',
+  'fire>yawn':'Burnout Engine','fire>puke':'Hot Take Factory','fire>trash':'Arson Inspector','fire>chartdown':'Apocalypse DJ',
+  'sideeye>handshake':'Federal Bestie','sideeye>crylaugh':'Gossip Hyena','sideeye>popcorn':'Surveillance Enjoyer','sideeye>robot':'CAPTCHA Vigilante',
+  'popcorn>puke':'Drama Puritan','popcorn>trash':'Balcony Heckler','popcorn>chartdown':'Collapse Enthusiast','popcorn>sideeye':'Reality TV Detective',
+  'chartdown>fire':'Motivational Doomer','chartdown>crylaugh':'Gallows Influencer','chartdown>handshake':'Supportive Pessimist','chartdown>popcorn':'Recession Obsessive',
+  'robot>bullseye':'Algorithm Judge','robot>puke':'Slop Exorcist','robot>sideeye':'Slop Sheriff','robot>trash':'Prompt Archaeologist','robot>chartdown':'Silicon Doomer'
+};
+
 // from raw stats -> the titles you hold + your worn calltag (highest)
 function computeIdentity(stats) {
   var recv = {}, give = {};
   (stats || []).forEach(function (s) { recv[s.badge] = s.recv; give[s.badge] = s.give; });
-  var recvTitles = [], giveTitles = [], comboTitles = [], totalPrestige = 0;
+  var recvTitles = [], giveTitles = [], comboTitles = [], crossTitles = [], totalPrestige = 0;
 
   function singles(counts, ladders, axis, out) {
     Object.keys(counts).forEach(function (b) {
@@ -220,11 +239,19 @@ function computeIdentity(stats) {
   combos(recv, RECEIVER_COMBOS, RECEIVER_TRIPLETS, 'recv');
   combos(give, GIVER_COMBOS, GIVER_TRIPLETS, 'give');
 
+  // CROSSES (R×G): receive X heavily AND give Y heavily — the moat persona
+  for (var ck in RECV_GIVE_CROSSES) {
+    var cp = ck.split('>'), rx = cp[0], gy = cp[1];
+    if ((recv[rx] || 0) >= 10 && (give[gy] || 0) >= 10) {
+      crossTitles.push({ label: RECV_GIVE_CROSSES[ck], axis: 'cross', tier: 2, badges: [rx, gy], strength: Math.min(recv[rx], give[gy]) });
+    }
+  }
+
   // calltag: highest tier (triplet > combo > single), then prestige, rung, strength
-  var all = recvTitles.concat(giveTitles).concat(comboTitles).slice().sort(function (a, b) {
+  var all = recvTitles.concat(giveTitles).concat(comboTitles).concat(crossTitles).slice().sort(function (a, b) {
     return ((b.tier || 1) - (a.tier || 1)) || ((b.prestige || 0) - (a.prestige || 0)) || ((b.idx || 0) - (a.idx || 0)) || ((b.strength || b.count || 0) - (a.strength || a.count || 0));
   });
-  return { recvTitles: recvTitles, giveTitles: giveTitles, comboTitles: comboTitles, totalPrestige: totalPrestige, calltag: all.length ? all[0].label : null, calltagPrestige: all.length ? (all[0].prestige || 0) : 0 };
+  return { recvTitles: recvTitles, giveTitles: giveTitles, comboTitles: comboTitles, crossTitles: crossTitles, totalPrestige: totalPrestige, calltag: all.length ? all[0].label : null, calltagPrestige: all.length ? (all[0].prestige || 0) : 0 };
 }
 
 // gold ★ per completed prestige cycle (50 of a badge), capped for display
@@ -254,7 +281,7 @@ function dossierHtml() {
   var html = '<div class="panel dossier"><div class="label">🪪 YOUR DOSSIER</div>';
   html += '<div class="dz-calltag">WORN: <b>' + escapeHtml(worn) + '</b>' + stars(id.calltagPrestige) + '</div>';
   var seen = {}, opts = '<option value="__auto__"' + (chosen === '__auto__' ? ' selected' : '') + '>★ Auto (highest)</option>';
-  (id.comboTitles || []).concat(recv).concat(give).forEach(function (t) { if (seen[t.label]) return; seen[t.label] = 1; opts += '<option value="' + escapeHtml(t.label) + '"' + (chosen === t.label ? ' selected' : '') + '>' + escapeHtml(t.label) + '</option>'; });
+  (id.crossTitles || []).concat(id.comboTitles || []).concat(recv).concat(give).forEach(function (t) { if (seen[t.label]) return; seen[t.label] = 1; opts += '<option value="' + escapeHtml(t.label) + '"' + (chosen === t.label ? ' selected' : '') + '>' + escapeHtml(t.label) + '</option>'; });
   opts += '<option value="__none__"' + (chosen === '__none__' ? ' selected' : '') + '>— no label —</option>';
   html += '<div class="dz-pick">WEAR: <select id="calltag-sel">' + opts + '</select></div>';
   if (id.comboTitles && id.comboTitles.length) {
@@ -264,6 +291,13 @@ function dossierHtml() {
       html += '<div class="dz-row"><span class="dz-badge dz-combobadge">' + bs + '</span>' +
         '<span class="dz-title dz-combotitle">' + escapeHtml(c.label) + '</span>' +
         '<span class="dz-prog muted">' + (c.tier === 3 ? 'TRIPLET' : 'combo') + ' · ' + (c.axis === 'recv' ? 'earned' : 'projected') + '</span></div>';
+    });
+  }
+  if (id.crossTitles && id.crossTitles.length) {
+    html += '<div class="dz-sub">⚡ CROSS PERSONAS — prompts × projection</div>';
+    id.crossTitles.slice().sort(function (a, b) { return b.strength - a.strength; }).forEach(function (c) {
+      html += '<div class="dz-row"><span class="dz-badge dz-combobadge">' + badgeEmoji(c.badges[0]) + '→' + badgeEmoji(c.badges[1]) + '</span>' +
+        '<span class="dz-title dz-combotitle">' + escapeHtml(c.label) + '</span><span class="dz-prog muted">cross</span></div>';
     });
   }
   if (recv.length) html += '<div class="dz-sub">WHAT YOUR PROMPTS EARN</div>' + recv.map(function (t) { return row(t, 'recv'); }).join('');
