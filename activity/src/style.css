@@ -393,6 +393,8 @@ button.bchip.dispute-badge:disabled { opacity: 0.5; cursor: default; }
 .pg-flex { font-size: 13px; padding: 3px 2px 3px 8px; }
 .pg-flex b { color: #ffd84d; }
 
+.ready-tick { color: var(--phosphor); font-weight: bold; text-shadow: 0 0 6px rgba(157,255,190,0.5); }
+
 /* ── Tier 1 dossier — badges become names ── */
 .dossier .dz-calltag { margin: 8px 0 6px; font-size: 16px; }
 .dz-sub { font-size: 11px; letter-spacing: 2px; color: var(--phosphor-dim); text-transform: uppercase; margin: 12px 0 4px; }

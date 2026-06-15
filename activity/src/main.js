@@ -810,6 +810,7 @@ function render() {
 }
 
 function renderLobby() {
+  if (STATE.session.is_public && STATE.session.infinite) return renderTableLobby();
   if (STATE.session.is_public) return renderPublicWaiting();
   var roster = STATE.players.map(function (p) { return '<div class="chip">▸ ' + escapeHtml(p.username) + '</div>'; }).join('') + '<div class="chip botchip">🤖 PROMPT_AI</div>';
   var opts = CATEGORIES.map(function (c) {
@@ -833,6 +834,37 @@ function renderLobby() {
   });
   el('findgame-btn').addEventListener('click', function () { browseTables(el('findgame-btn')); });
   wireDossier();
+  wireLeaderboardTabs();
+}
+
+// Table lobby — you SIT at the table and ready up; it goes live at 2 ready
+// humans, or you can take on PROMPT_AI solo right now.
+function renderTableLobby() {
+  var me = STATE.players.filter(function (p) { return p.id === STATE.user.id; })[0] || {};
+  var iReady = !!me.ready;
+  var readyHumans = STATE.players.filter(function (p) { return p.id !== BOT_ID && p.ready; }).length;
+  var roster = STATE.players.map(function (p) {
+    var mine = p.id === STATE.user.id ? ' (you)' : '';
+    var tick = p.ready ? '<span class="ready-tick">✓ ready</span>' : '<span class="muted">…sitting</span>';
+    return '<div class="chip">▸ ' + escapeHtml(p.username) + mine + ' ' + tick + '</div>';
+  }).join('') + '<div class="chip botchip">🤖 PROMPT_AI <span class="muted">(always game)</span></div>';
+  var tableName = STATE.session.name ? escapeHtml(STATE.session.name) : 'the table';
+  el('game').innerHTML =
+    '<div class="panel"><div class="label">&gt;&gt; ' + tableName + ' — take a seat</div>' +
+    '<div class="roster">' + roster + '</div></div>' +
+    '<div class="prompt-line"><span class="arrow">&gt;</span> ' +
+    (iReady
+      ? (readyHumans >= 2 ? 'starting…' : 'YOU\'RE READY — waiting for another player to ready up…')
+      : 'ready up when you are — the table starts at 2 ready players') + '</div>' +
+    '<div class="row-actions">' +
+    (iReady ? '' : '<button id="ready-btn" class="primary">✓ READY UP</button> ') +
+    '<button id="playbot-btn"' + (iReady ? ' class="primary"' : ' class="ghost"') + '>▶ PLAY PROMPT_AI NOW</button> ' +
+    '<button id="leave-table-btn" class="ghost">◂ leave table</button></div>' +
+    '<div class="muted">tables never end — rack up points and disputes, leave whenever.</div>' +
+    leaderboardHtml();
+  var rb = el('ready-btn'); if (rb) rb.addEventListener('click', function () { rb.disabled = true; rb.textContent = 'readying…'; callFn('ready', { discord_id: STATE.user.id }).then(function () { refresh(); }, function (e) { rb.disabled = false; rb.textContent = '✓ READY UP'; flashErr(e); }); });
+  var pb = el('playbot-btn'); if (pb) pb.addEventListener('click', function () { pb.disabled = true; pb.textContent = 'dealing in…'; callFn('playbot', { discord_id: STATE.user.id }).then(function () { refresh(); }, function (e) { pb.disabled = false; pb.textContent = '▶ PLAY PROMPT_AI NOW'; flashErr(e); }); });
+  el('leave-table-btn').addEventListener('click', function () { var b = el('leave-table-btn'); b.disabled = true; b.textContent = 'leaving…'; leavePublic(); });
   wireLeaderboardTabs();
 }
 

@@ -1,5 +1,8 @@
 // ============================================================
 // PROMPT — game referee + Discord OAuth
+// v23: READY-UP — joining a table now SITS you in its lobby (no auto-start).
+//      'ready' marks you ready (table goes live at 2 ready humans); 'playbot'
+//      starts a solo round vs PROMPT_AI on demand. startTable clears ready.
 // v22: BADGE DISPUTES — contest a badge on your prompt during the 75s veto;
 //      the table votes uphold/overturn; an overturn strikes those badge-votes.
 //      All 13 courtroom behaviors tracked -> prompt_dispute_stats.
@@ -110,7 +113,7 @@ async function clearRound(sessionId: string) {
   await db.from("prompt_badge_votes").delete().eq("session_id", sessionId);
   await db.from("prompt_disputes").delete().eq("session_id", sessionId);
   await db.from("prompt_reports").delete().eq("session_id", sessionId);
-  await db.from("prompt_players").update({ locked_round: 0 }).eq("session_id", sessionId);
+  await db.from("prompt_players").update({ locked_round: 0, ready: false }).eq("session_id", sessionId);
 }
 
 async function exchangeToken(body: any) {
@@ -152,8 +155,25 @@ async function startTable(session: any) {
   const players = await countPlayers(session.id);
   if (players < 1) return;
   const { data: pick } = await db.rpc("prompt_pick_response", { p_category: "all", p_exclude: null });
-  await db.from("prompt_players").update({ score: 0 }).eq("session_id", session.id);
+  await db.from("prompt_players").update({ score: 0, ready: false }).eq("session_id", session.id);
   await db.from("prompt_sessions").update({ phase: "responding", round: 1, current_response: pick, deadline: deadlineIn(RESPOND_MS), updated_at: nowIso() }).eq("id", session.id).eq("phase", "lobby");
+}
+// READY-UP — a table holds in lobby until players ready up (or one opts for the bot).
+async function readyUp(body: any) {
+  const session = await getOrCreateSession(body.instance_id);
+  if (session.phase !== "lobby") return { ok: false, reason: "already underway" };
+  await db.from("prompt_players").update({ ready: true }).eq("session_id", session.id).eq("discord_id", String(body.discord_id));
+  const { data: rp } = await db.from("prompt_players").select("discord_id").eq("session_id", session.id).eq("ready", true);
+  const readyHumans = (rp ?? []).map((p: any) => String(p.discord_id)).filter((d) => d !== BOT_ID).length;
+  if (readyHumans >= 2) { await startTable(session); return { ok: true, started: true, ready: readyHumans }; }
+  return { ok: true, started: false, ready: readyHumans };
+}
+async function playBot(body: any) {
+  const session = await getOrCreateSession(body.instance_id);
+  if (session.phase !== "lobby") return { ok: false, reason: "already underway" };
+  await db.from("prompt_players").update({ ready: true }).eq("session_id", session.id).eq("discord_id", String(body.discord_id));
+  await startTable(session);
+  return { ok: true, started: true };
 }
 async function createTable(isPublic: boolean, name: string, code: string | null) {
   const iid = (isPublic ? "tbl-" : "priv-") + crypto.randomUUID().slice(0, 8);
@@ -189,7 +209,7 @@ async function joinTable(body: any) {
   if (session.phase === "ended") return { ok: false, reason: "table closed" };
   if ((await countPlayers(session.id)) >= PUB_MAX) return { ok: false, reason: "table full" };
   await db.from("prompt_players").upsert({ session_id: session.id, discord_id: String(body.discord_id), username: body.username ?? "Player" }, { onConflict: "session_id,discord_id" });
-  if (session.phase === "lobby") await startTable(session);
+  // v23: sit in the lobby; the table goes live on ready-up, not on join
   const { data: cur } = await db.from("prompt_sessions").select("phase").eq("id", session.id).maybeSingle();
   return { ok: true, instance_id: session.instance_id, session_id: session.id, phase: cur?.phase ?? session.phase, count: await countPlayers(session.id) };
 }
@@ -198,9 +218,9 @@ async function hostTable(body: any) {
   const name = (body.name && String(body.name).slice(0, 24)) || "Private Party";
   const t = await createTable(false, name, code);
   await db.from("prompt_players").upsert({ session_id: t.id, discord_id: String(body.discord_id), username: body.username ?? "Player" }, { onConflict: "session_id,discord_id" });
-  await startTable(t);
+  // v23: host sits in the private lobby; ready up or play the bot to begin
   const { data: cur } = await db.from("prompt_sessions").select("phase").eq("id", t.id).maybeSingle();
-  return { ok: true, instance_id: t.instance_id, session_id: t.id, code, phase: cur?.phase ?? "responding" };
+  return { ok: true, instance_id: t.instance_id, session_id: t.id, code, phase: cur?.phase ?? "lobby" };
 }
 async function joinTableCode(body: any) {
   const code = String(body.code || "").toUpperCase().trim();
@@ -209,7 +229,7 @@ async function joinTableCode(body: any) {
   if (!session) return { ok: false, reason: "no table with that code" };
   if ((await countPlayers(session.id)) >= PUB_MAX) return { ok: false, reason: "table full" };
   await db.from("prompt_players").upsert({ session_id: session.id, discord_id: String(body.discord_id), username: body.username ?? "Player" }, { onConflict: "session_id,discord_id" });
-  if (session.phase === "lobby") await startTable(session);
+  // v23: code-joiner sits in the lobby too; ready-up starts the table
   const { data: cur } = await db.from("prompt_sessions").select("phase").eq("id", session.id).maybeSingle();
   return { ok: true, instance_id: session.instance_id, session_id: session.id, phase: cur?.phase ?? session.phase };
 }
@@ -636,6 +656,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
       case "tagvote":       return json(await tagvote(body));
       case "badgevote":     return json(await badgevote(body));
       case "lockvote":      return json(await lockvote(body));
+      case "ready":         return json(await readyUp(body));
+      case "playbot":       return json(await playBot(body));
       case "badgedispute":  return json(await badgeDispute(body));
       case "badgedisputevote": return json(await badgeDisputeVote(body));
       case "next":          return json(await nextRound(body));
