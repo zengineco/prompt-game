@@ -385,6 +385,14 @@ button.bchip.dispute-badge:disabled { opacity: 0.5; cursor: default; }
   padding: 7px 10px; border-radius: 6px; margin-bottom: 8px; font-size: 13px;
 }
 
+/* ── postgame / round-ended report ──────────────────────────────── */
+.postgame { border-color: var(--phosphor); box-shadow: inset 0 0 16px rgba(157,255,190,0.10); }
+.postgame .label { letter-spacing: 3px; }
+.pg-row { font-size: 15px; padding: 5px 2px; color: var(--phosphor); }
+.pg-sub { margin-top: 8px; font-size: 11px; letter-spacing: 2px; opacity: 0.65; }
+.pg-flex { font-size: 13px; padding: 3px 2px 3px 8px; }
+.pg-flex b { color: #ffd84d; }
+
 /* ── Tier 1 dossier — badges become names ── */
 .dossier .dz-calltag { margin: 8px 0 6px; font-size: 16px; }
 .dz-sub { font-size: 11px; letter-spacing: 2px; color: var(--phosphor-dim); text-transform: uppercase; margin: 12px 0 4px; }

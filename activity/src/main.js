@@ -1142,16 +1142,44 @@ function renderResolving() {
         (mine && canDispute ? '<div class="dispute-hint muted">⚖️ tap a badge to dispute it — the table decides</div>' : '') + '</div>';
     }).join('');
     var roast = botWon ? '<div class="panel roast"><div class="label">🤖 PROMPT_AI TOPPED THE BOARD</div><div class="sub-text">the machine pulled the most badges this round. humbling.</div></div>' : '';
-    bodyHtml = roast + '<div class="results">' + rowsHtml + '</div>' + disputePanelHtml(subs);
+    bodyHtml = roast + postgameHtml() + '<div class="results">' + rowsHtml + '</div>' + disputePanelHtml(subs);
   }
 
   el('game').innerHTML =
     head + bodyHtml + timerBarHtml() +
-    (stage >= 1 ? '<div class="row-actions"><button id="next-btn">NEXT ROUND ▸</button></div>' : '');
+    (stage >= 1 ? '<div class="row-actions"><button id="next-btn">' + (STATE.session.is_public ? 'PLAY AGAIN ▸' : 'NEXT ROUND ▸') + '</button>' +
+      (STATE.session.is_public ? '<button id="menu-btn" class="ghost">◂ MAIN MENU</button>' : '') + '</div>' : '');
 
   var nb = el('next-btn'); if (nb) nb.addEventListener('click', function () { callFn('next', {}); });
+  var mb = el('menu-btn'); if (mb) mb.addEventListener('click', function () { mb.disabled = true; mb.textContent = 'leaving…'; leavePublic(); });
   wireDisputes();
   // (auto-advance is handled globally by scheduleAutoAdvance() in render())
+}
+
+// the round-ended report — the payoff screen, shown every round on infinite tables
+function postgameHtml() {
+  var subs = STATE.submissions.filter(function (s) { return !s.hidden; });
+  function cnt(subId) { return STATE.badgeVotes.filter(function (v) { return v.submission_id === subId; }).length; }
+  var top = 0; subs.forEach(function (s) { var c = cnt(s.id); if (c > top) top = c; });
+  var winners = subs.filter(function (s) { return cnt(s.id) === top && top > 0; });
+  function nameOf(did) { var p = STATE.players.filter(function (x) { return x.id === did; })[0]; return p ? p.username : (did === BOT_ID ? 'PROMPT_AI' : did); }
+  // most badges given this round (excludes the bot)
+  var givenBy = {}; STATE.badgeVotes.forEach(function (v) { if (String(v.voter) !== BOT_ID) givenBy[v.voter] = (givenBy[v.voter] || 0) + 1; });
+  var topGiver = null, topGiven = 0; Object.keys(givenBy).forEach(function (k) { if (givenBy[k] > topGiven) { topGiven = givenBy[k]; topGiver = k; } });
+  var decorated = winners.length
+    ? winners.map(function (s) { return escapeHtml(s.username) + (s.discord_id === BOT_ID ? ' 🤖' : ''); }).join(' & ') + ' <span class="muted">(' + top + ')</span>'
+    : '<span class="muted">nobody — a quiet round</span>';
+  var heavy = topGiver ? escapeHtml(nameOf(topGiver)) + ' <span class="muted">(' + topGiven + ' thrown)</span>' : '<span class="muted">—</span>';
+  // identity flex — what the people at this table are now called
+  var flex = STATE.players.filter(function (p) { return p.id !== BOT_ID; }).map(function (p) {
+    var prof = STATE.profilesById[p.id] || {};
+    if (!prof.calltag) return '';
+    return '<div class="pg-flex">' + escapeHtml(p.username) + ' — <b>「' + escapeHtml(prof.calltag) + '」</b>' + stars(prof.prestige) + '</div>';
+  }).filter(Boolean).join('');
+  return '<div class="panel postgame"><div class="label">|ROUND ENDED|</div>' +
+    '<div class="pg-row">🏆 MOST DECORATED — ' + decorated + '</div>' +
+    '<div class="pg-row">🎖️ HEAVIEST HAND — ' + heavy + '</div>' +
+    (flex ? '<div class="pg-sub">WHO THEY ARE NOW</div>' + flex : '') + '</div>';
 }
 
 // the dispute argument board — open disputes the table can judge, + outcomes
