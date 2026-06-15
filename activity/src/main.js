@@ -208,6 +208,41 @@ var RECV_GIVE_CROSSES = {
   'robot>bullseye':'Algorithm Judge','robot>puke':'Slop Exorcist','robot>sideeye':'Slop Sheriff','robot>trash':'Prompt Archaeologist','robot>chartdown':'Silicon Doomer'
 };
 
+// R×G×G Boss Forms: recv X + give Y + give Z (Y,Z distinct). key "recvX|giveA+giveB" (gives sorted).
+var BOSS_FORMS = {
+  'bullseye|puke+sideeye':'Forensic Hater','bullseye|sideeye+trash':'Receipt Goblin','bullseye|chartdown+puke':'Doom Engineer','bullseye|cap+sideeye':'Conspiracy Accountant','bullseye|puke+yawn':'Joy Coroner','bullseye|robot+sideeye':'Turing Inquisitor',
+  'chef|puke+trash':'Sender Backer','chef|sideeye+trash':'Recipe Warlord','chef|chartdown+puke':'Burnout Prophet','chef|cap+sideeye':'Culinary Truther',
+  'handshake|sideeye+trash':'Informal Informant','handshake|chartdown+puke':'Red Flag Industrial Complex','handshake|cap+sideeye':'Plausible Deniability','handshake|crylaugh+puke':'Passive-Aggressive Angel',
+  'clown|chartdown+puke':'Doom Clown','clown|sideeye+trash':'Court Jester General','clown|crylaugh+puke':'Self-Aware Trainwreck','clown|cap+sideeye':'Irony Terrorist',
+  'yawn|crylaugh+fire':'Corporate Hype Zombie','yawn|puke+sideeye':'Professional Disappointer','yawn|chartdown+trash':'Black Hole Reviewer','yawn|bullseye+puke':'Spreadsheet Executioner',
+  'cap|chartdown+sideeye':'Basement Oracle','cap|robot+sideeye':'Synthetic Bloodhound','cap|puke+trash':'Professional Debunker','cap|popcorn+sideeye':'Conspiracy Spectator',
+  'puke|crylaugh+popcorn':'Cringe Vulture','puke|sideeye+trash':'Vice Principal of Hell','puke|crylaugh+fire':'Outrage Influencer','puke|chartdown+sideeye':'Moral Bankruptcy Auditor',
+  'money|puke+sideeye':'Weekend Narc','money|chartdown+crylaugh':'Bankruptcy Comedian','money|sideeye+trash':'Fun Detective','money|chartdown+puke':'Regret Speedrun',
+  'trash|crylaugh+sideeye':'Gossip Hyena Prime','trash|puke+sideeye':'Grievance Dragon','trash|chartdown+popcorn':'Collapse Tourist','trash|handshake+sideeye':'Smiling Assassin',
+  'crylaugh|popcorn+sideeye':'Drama Wildlife Photographer','crylaugh|puke+trash':'Judgment Airlines','crylaugh|chartdown+sideeye':'Gallows Investigator','crylaugh|cap+sideeye':'Irony Launderer',
+  'fire|puke+trash':'Hot Take Crematorium','fire|chartdown+sideeye':'Apocalypse Evangelist','fire|cap+crylaugh':'Discourse Engineer','fire|puke+sideeye':'Rage Reactor Core',
+  'sideeye|chartdown+trash':'Case Builder','sideeye|puke+trash':'Human Terms of Service','sideeye|crylaugh+popcorn':'Reality Show Coroner','sideeye|chartdown+robot':'CAPTCHA Inquisitor',
+  'popcorn|puke+sideeye':'Rubbernecker Supreme','popcorn|chartdown+crylaugh':'Collapse Connoisseur','popcorn|sideeye+trash':'Balcony Intelligence Agency','popcorn|fire+puke':'Riot Food Critic',
+  'chartdown|puke+sideeye':'Failure Archaeologist','chartdown|crylaugh+popcorn':'End Times Entertainer','chartdown|sideeye+trash':'Career Undertaker','chartdown|fire+puke':'Motivational Arsonist',
+  'robot|puke+sideeye':'Slop Exterminator','robot|sideeye+trash':'Prompt Detective','robot|chartdown+sideeye':'Silicon Prophet','robot|bullseye+puke':'Algorithmic Snob'
+};
+// G×R×R Self-Mythology: give X + recv Y + recv Z. key "giveX|recvA+recvB" (recvs sorted; doubled => >=20).
+var SELF_MYTH = {
+  'puke|bullseye+bullseye':'Perfectionist Cannibal','puke|crylaugh+fire':'Fun Allergy','puke|chef+handshake':'Bitter Celebrity Chef','puke|crylaugh+popcorn':'Cringe Influencer','puke|bullseye+fire':'Elite Snoblin',
+  'trash|bullseye+chef':'Masterpiece Hater','trash|crylaugh+handshake':'Toxic Sweetheart','trash|fire+popcorn':'Disaster Curator','trash|bullseye+handshake':'Professional Contrarian','trash|crylaugh+crylaugh':'Laughing Executioner',
+  'sideeye|bullseye+bullseye':'Internal Affairs','sideeye|handshake+handshake':'Suspicious Golden Retriever','sideeye|crylaugh+popcorn':'Gossip Cryptid','sideeye|bullseye+chef':'Pattern Addict','sideeye|crylaugh+fire':'Viral Detective',
+  'chartdown|bullseye+bullseye':'Catastrophe Engineer','chartdown|crylaugh+fire':'Party Undertaker','chartdown|chef+handshake':'Supportive Ruiner','chartdown|crylaugh+popcorn':'Doomsday Host','chartdown|bullseye+fire':'Doom Visionary',
+  'cap|bullseye+bullseye':'Reality Denier Pro Max','cap|handshake+handshake':'Community Cryptid','cap|crylaugh+fire':'Clickbait Messiah','cap|bullseye+chef':'Fabrication Artisan','cap|crylaugh+popcorn':'Conspiracy Content Creator',
+  'yawn|fire+fire':'Burnout Sun','yawn|crylaugh+crylaugh':'Dead-Eyed Comedian','yawn|bullseye+chef':'Talented Bore','yawn|handshake+handshake':'Beige Messiah','yawn|fire+popcorn':'Reluctant Spectacle',
+  'clown|bullseye+bullseye':'Self-Fulfilling Prophecy','clown|crylaugh+fire':'Crowd Control Hazard','clown|handshake+popcorn':'Class Clown President','clown|bullseye+chef':'Weaponized Goofball','clown|bullseye+fire':'Chaos Savant',
+  'handshake|bullseye+chef':'Validation Emperor','handshake|crylaugh+fire':'Human LinkedIn','handshake|crylaugh+popcorn':"People's Parasocialist",'handshake|bullseye+bullseye':'Consensus Machine','handshake|chef+fire':'Certified Fresh',
+  'chef|bullseye+bullseye':'Main Chef Energy','chef|crylaugh+fire':'Yelp Autofiller','chef|handshake+handshake':"Teacher's Favorite Teacher",'chef|crylaugh+popcorn':'Culinary Drama Queen','chef|bullseye+fire':'Peak Performance Goblin',
+  'crylaugh|bullseye+bullseye':'Natural Disaster of Charm','crylaugh|handshake+handshake':'Community Property','crylaugh|fire+fire':'Content Reactor','crylaugh|bullseye+chef':'Joke Craftsman','crylaugh|popcorn+popcorn':'Main Character Accident',
+  'fire|bullseye+bullseye':'Hype Tyrant','fire|bullseye+chef':'Excellence Addict','fire|crylaugh+crylaugh':'Engagement Singularity','fire|handshake+handshake':'Cult Leader Lite','fire|crylaugh+popcorn':'Walking Season Finale',
+  'popcorn|bullseye+bullseye':'Drama Physicist','popcorn|crylaugh+fire':'Audience Surrogate','popcorn|handshake+handshake':'Community Vulture','popcorn|bullseye+chef':'Spectacle Architect',
+  'robot|bullseye+bullseye':'Human CAPTCHA','robot|crylaugh+fire':'Slop Magnet','robot|handshake+handshake':'Synthetic Empath','robot|bullseye+chef':'Prompt Black Belt','robot|crylaugh+popcorn':'AI Apocalypse Tourist'
+};
+
 // from raw stats -> the titles you hold + your worn calltag (highest)
 function computeIdentity(stats) {
   var recv = {}, give = {};
@@ -246,6 +281,18 @@ function computeIdentity(stats) {
       crossTitles.push({ label: RECV_GIVE_CROSSES[ck], axis: 'cross', tier: 2, badges: [rx, gy], strength: Math.min(recv[rx], give[gy]) });
     }
   }
+
+  // 3-badge crosses (tier 3, rarest): Boss Forms (recv X + give Y,Z) & Self-Mythology (give X + recv Y,Z)
+  function tripleCross(map, prim, sec, kind) {
+    for (var tk in map) {
+      var tp = tk.split('|'), p = tp[0], ss = tp[1].split('+');
+      if ((prim[p] || 0) < 10) continue;
+      var ok = ss[0] === ss[1] ? (sec[ss[0]] || 0) >= 20 : ((sec[ss[0]] || 0) >= 10 && (sec[ss[1]] || 0) >= 10);
+      if (ok) crossTitles.push({ label: map[tk], axis: kind, tier: 3, badges: [p].concat(ss), strength: Math.min(prim[p], sec[ss[0]] || 0, sec[ss[1]] || 0) });
+    }
+  }
+  tripleCross(BOSS_FORMS, recv, give, 'boss');
+  tripleCross(SELF_MYTH, give, recv, 'myth');
 
   // calltag: highest tier (triplet > combo > single), then prestige, rung, strength
   var all = recvTitles.concat(giveTitles).concat(comboTitles).concat(crossTitles).slice().sort(function (a, b) {
@@ -295,9 +342,11 @@ function dossierHtml() {
   }
   if (id.crossTitles && id.crossTitles.length) {
     html += '<div class="dz-sub">⚡ CROSS PERSONAS — prompts × projection</div>';
-    id.crossTitles.slice().sort(function (a, b) { return b.strength - a.strength; }).forEach(function (c) {
-      html += '<div class="dz-row"><span class="dz-badge dz-combobadge">' + badgeEmoji(c.badges[0]) + '→' + badgeEmoji(c.badges[1]) + '</span>' +
-        '<span class="dz-title dz-combotitle">' + escapeHtml(c.label) + '</span><span class="dz-prog muted">cross</span></div>';
+    id.crossTitles.slice().sort(function (a, b) { return ((b.tier || 2) - (a.tier || 2)) || (b.strength - a.strength); }).forEach(function (c) {
+      var bs = c.badges.map(function (b) { return badgeEmoji(b); }).join('');
+      var lbl = c.axis === 'boss' ? 'BOSS FORM' : (c.axis === 'myth' ? 'MYTHOS' : 'cross');
+      html += '<div class="dz-row"><span class="dz-badge dz-combobadge">' + bs + '</span>' +
+        '<span class="dz-title dz-combotitle">' + escapeHtml(c.label) + '</span><span class="dz-prog muted">' + lbl + '</span></div>';
     });
   }
   if (recv.length) html += '<div class="dz-sub">WHAT YOUR PROMPTS EARN</div>' + recv.map(function (t) { return row(t, 'recv'); }).join('');
@@ -671,10 +720,10 @@ async function refresh() {
     STATE.myIdentity = computeIdentity(STATE.badgeStats);
     // auto-wear the highest ONLY until the player has made a choice (chosen_title set)
     var chosenT = STATE.myProfile && STATE.myProfile.chosen_title;
-    if (!chosenT && STATE.myIdentity.calltag && STATE.myProfile && STATE.myProfile.calltag !== STATE.myIdentity.calltag) {
+    if (!chosenT && STATE.myIdentity.calltag && (!STATE.myProfile || STATE.myProfile.calltag !== STATE.myIdentity.calltag)) {
       sb.rpc('prompt_set_calltag', { p_discord: STATE.user.id, p_calltag: STATE.myIdentity.calltag }).then(function () {}, function () {});
     }
-    if (STATE.myProfile && (STATE.myProfile.prestige || 0) !== STATE.myIdentity.totalPrestige) {
+    if (STATE.myIdentity.totalPrestige && (!STATE.myProfile || (STATE.myProfile.prestige || 0) !== STATE.myIdentity.totalPrestige)) {
       sb.rpc('prompt_set_prestige', { p_discord: STATE.user.id, p_prestige: STATE.myIdentity.totalPrestige }).then(function () {}, function () {});
     }
     var lb = await sb.from('prompt_profiles').select('username,prestige,rank,calltag').order('prestige', { ascending: false }).limit(8);
