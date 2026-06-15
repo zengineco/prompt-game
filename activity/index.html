@@ -25,8 +25,13 @@ NOTE: No AdSense (Discord sandbox/ToS). Fonts bundled via @fontsource.
       <main class="screen">
         <div class="topbar">
           <span class="title">PROMPT</span>
-          <span class="zg-monogram">FK</span>
+          <span class="topbar-tools">
+            <button class="tb-btn" id="help-btn" title="how to play" aria-label="how to play">?</button>
+            <button class="tb-btn" id="settings-btn" title="settings" aria-label="settings">&#9881;</button>
+            <span class="zg-monogram">FK</span>
+          </span>
         </div>
+        <div id="modal-root"></div>
 
         <pre class="boot" id="boot"></pre>
         <div class="link-status" id="link-status"></div>

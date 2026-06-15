@@ -1486,8 +1486,66 @@ function paintTransmission() {
   }
 }
 
+// ── Settings, themes & tutorial ─────────────────────────────────────────────
+var THEMES = { dark: 'Matrix Dark', light: 'Windows 3.1' };
+function getTheme() { try { return localStorage.getItem('prompt_theme') || 'dark'; } catch (e) { return 'dark'; } }
+function applyTheme(t) {
+  if (t !== 'light') t = 'dark';
+  document.body.classList.toggle('theme-light', t === 'light');
+  try { localStorage.setItem('prompt_theme', t); } catch (e) {}
+  var rain = el('rain'); if (rain) rain.style.display = t === 'light' ? 'none' : '';
+}
+function closeModal() { var m = el('modal-root'); if (m) m.innerHTML = ''; }
+function openSettings() {
+  var t = getTheme();
+  var m = el('modal-root'); if (!m) return;
+  m.innerHTML =
+    '<div class="modal-overlay" id="modal-ov"><div class="modal-card"><div class="modal-head">⚙ SETTINGS<button class="modal-x" id="modal-x">✕</button></div>' +
+    '<div class="set-row"><span>THEME</span><div class="theme-toggle">' +
+    '<button class="theme-opt' + (t === 'dark' ? ' on' : '') + '" data-theme="dark">🟢 Matrix Dark</button>' +
+    '<button class="theme-opt' + (t === 'light' ? ' on' : '') + '" data-theme="light">🪟 Windows 3.1</button></div></div>' +
+    '<div class="set-row"><span>HOW TO PLAY</span><button class="set-btn" id="set-tut">📖 Replay tutorial</button></div>' +
+    '<div class="set-foot muted">PROMPT · f-keys.com — your badges are your reputation. play nice (or don\'t).</div>' +
+    '</div></div>';
+  el('modal-ov').addEventListener('click', function (e) { if (e.target.id === 'modal-ov') closeModal(); });
+  el('modal-x').addEventListener('click', closeModal);
+  Array.prototype.forEach.call(document.querySelectorAll('.theme-opt'), function (b) {
+    b.addEventListener('click', function () { applyTheme(b.getAttribute('data-theme')); openSettings(); });
+  });
+  el('set-tut').addEventListener('click', function () { openTutorial(); });
+}
+var TUTORIAL_STEPS = [
+  { e: '🤖', h: 'The AI broke', b: 'Every round you see a real answer an AI gave — but the question is gone. Your job: guess the prompt that caused it.' },
+  { e: '⌨️', h: 'Fool the room', b: 'Type your best guess at the original prompt. So does everyone else… and so does PROMPT_AI, hiding in the crowd.' },
+  { e: '🎯', h: 'Badge the guesses', b: 'Drag the 15 badges onto other players\' guesses — 🎯 dead-on, 🤡 bozo, 🔥 heat, 🤖 AI slop. Most-decorated guess wins the round.' },
+  { e: '🪪', h: 'Become someone', b: 'The badges you EARN and the ones you GIVE stack into a named identity — Deadeye, Precision Idiot, Slop Sommelier. Hundreds to unlock.' },
+  { e: '⚖️', h: 'Argue your case', b: 'Think a badge was unfair? Dispute it during the results — the table votes to uphold or overturn. How you act under judgment becomes its own rep.' }
+];
+function openTutorial() {
+  var m = el('modal-root'); if (!m) return;
+  var steps = TUTORIAL_STEPS.map(function (s, i) {
+    return '<div class="tut-step"><div class="tut-emoji">' + s.e + '</div><div><div class="tut-h">' + (i + 1) + '. ' + s.h + '</div><div class="tut-b">' + escapeHtml(s.b) + '</div></div></div>';
+  }).join('');
+  m.innerHTML =
+    '<div class="modal-overlay" id="modal-ov"><div class="modal-card tut-card"><div class="modal-head">📖 HOW TO PLAY — PROMPT<button class="modal-x" id="modal-x">✕</button></div>' +
+    '<div class="tut-steps">' + steps + '</div>' +
+    '<button class="set-btn primary tut-go" id="tut-go">GOT IT — LET ME IN ▸</button></div></div>';
+  try { localStorage.setItem('prompt_tutorial_seen', '1'); } catch (e) {}
+  el('modal-ov').addEventListener('click', function (e) { if (e.target.id === 'modal-ov') closeModal(); });
+  el('modal-x').addEventListener('click', closeModal);
+  el('tut-go').addEventListener('click', closeModal);
+}
+function initChrome() {
+  applyTheme(getTheme());
+  var sb = el('settings-btn'); if (sb) sb.addEventListener('click', openSettings);
+  var hb = el('help-btn'); if (hb) hb.addEventListener('click', openTutorial);
+  var seen; try { seen = localStorage.getItem('prompt_tutorial_seen'); } catch (e) { seen = '1'; }
+  if (!seen) setTimeout(openTutorial, 900); // first-timers get the rundown
+}
+
 // ── BOOT ORDER ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function () {
+  initChrome();
   startRain();
   init().catch(function (err) {
     console.error('init:', err);

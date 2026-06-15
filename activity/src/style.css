@@ -395,6 +395,63 @@ button.bchip.dispute-badge:disabled { opacity: 0.5; cursor: default; }
 
 .ready-tick { color: var(--phosphor); font-weight: bold; text-shadow: 0 0 6px rgba(157,255,190,0.5); }
 
+/* ── topbar tools + modal (settings / tutorial) ─────────────────── */
+.topbar-tools { display: inline-flex; align-items: center; gap: 8px; }
+.tb-btn { cursor: pointer; background: transparent; border: 1px solid var(--phosphor-dim); color: var(--phosphor); width: 26px; height: 26px; border-radius: 5px; font-family: inherit; font-size: 14px; line-height: 1; padding: 0; }
+.tb-btn:hover { background: rgba(51,255,102,0.14); }
+.modal-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; z-index: 40; padding: 18px; }
+.modal-card { background: var(--bg-panel); border: 1px solid var(--phosphor); border-radius: 10px; max-width: 460px; width: 100%; max-height: 88%; overflow: auto; padding: 16px 18px; box-shadow: 0 0 26px rgba(51,255,102,0.25); }
+.modal-head { display: flex; justify-content: space-between; align-items: center; font-weight: bold; letter-spacing: 2px; color: var(--phosphor); border-bottom: 1px solid var(--phosphor-dim); padding-bottom: 10px; margin-bottom: 12px; }
+.modal-x { cursor: pointer; background: transparent; border: none; color: var(--phosphor); font-size: 16px; line-height: 1; }
+.set-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed rgba(157,255,190,0.18); }
+.set-btn { cursor: pointer; font-family: inherit; background: transparent; border: 1px solid var(--phosphor); color: var(--phosphor); padding: 6px 12px; border-radius: 6px; }
+.set-btn.primary { background: var(--phosphor); color: var(--bg); font-weight: bold; }
+.theme-toggle { display: flex; gap: 6px; }
+.theme-opt { cursor: pointer; font-family: inherit; font-size: 12px; background: transparent; border: 1px solid var(--phosphor-dim); color: var(--phosphor); padding: 5px 9px; border-radius: 6px; }
+.theme-opt.on { background: var(--phosphor); color: var(--bg); border-color: var(--phosphor); font-weight: bold; }
+.set-foot { margin-top: 12px; font-size: 11px; }
+.tut-card { max-width: 500px; }
+.tut-steps { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.tut-step { display: flex; gap: 12px; align-items: flex-start; }
+.tut-emoji { font-size: 26px; line-height: 1; flex: 0 0 auto; }
+.tut-h { color: var(--phosphor); font-weight: bold; letter-spacing: 1px; margin-bottom: 2px; }
+.tut-b { font-size: 13px; opacity: 0.9; line-height: 1.45; }
+.tut-go { width: 100%; padding: 10px; font-size: 14px; letter-spacing: 1px; margin-top: 4px; }
+
+/* ── Windows 3.1 light theme ────────────────────────────────────── */
+body.theme-light {
+  --phosphor: #000080;       /* navy — the accent + text */
+  --phosphor-dim: #808080;
+  --bg: #c0c0c0;
+  --bg-panel: #c0c0c0;
+  --glow: none;
+  background: #008080;        /* the classic teal desktop */
+}
+body.theme-light .screen { font-family: 'Tahoma', 'Geneva', 'Segoe UI', sans-serif; color: #000; }
+body.theme-light .crt-frame { background: linear-gradient(160deg, #d4d0c8 0%, #bdb9b0 100%); box-shadow: 0 14px 40px rgba(0,0,0,0.45), inset 0 2px 0 #fff; }
+body.theme-light .crt-screen { background: #008080; box-shadow: inset 2px 2px 0 #fff, inset -2px -2px 0 #404040; }
+body.theme-light .crt-screen::before,
+body.theme-light .crt-screen::after { opacity: 0 !important; }   /* no scanlines/vignette */
+body.theme-light .crt-chin { background: #bdb9b0; color: #000; }
+body.theme-light .title, body.theme-light .label, body.theme-light .modal-head, body.theme-light .tut-h { color: #000080; text-shadow: none; }
+body.theme-light .footer, body.theme-light footer { color: #003; }
+body.theme-light .panel, body.theme-light .modal-card, body.theme-light .vcard, body.theme-light .result-row, body.theme-light .table-row, body.theme-light .chip {
+  background: #c0c0c0; color: #000; border-radius: 0;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff;
+  box-shadow: inset 1px 1px 0 #dfdfdf, 1px 1px 0 #000;
+}
+body.theme-light button, body.theme-light .tb-btn, body.theme-light .set-btn, body.theme-light .theme-opt, body.theme-light .dvote-btn, body.theme-light .badge-btn {
+  background: #c0c0c0; color: #000; border-radius: 0; text-shadow: none;
+  border: 2px solid; border-color: #fff #808080 #808080 #fff; box-shadow: 1px 1px 0 #000;
+}
+body.theme-light button:active, body.theme-light .tb-btn:active { border-color: #808080 #fff #fff #808080; box-shadow: none; }
+body.theme-light .set-btn.primary, body.theme-light .theme-opt.on, body.theme-light button.primary { background: #000080; color: #fff; border-color: #fff #000040 #000040 #fff; }
+body.theme-light .muted { color: #404040; }
+body.theme-light .modal-overlay { background: rgba(0,64,64,0.55); }
+body.theme-light input, body.theme-light select, body.theme-light textarea {
+  background: #fff; color: #000; border: 2px solid; border-color: #808080 #fff #fff #808080; border-radius: 0;
+}
+
 /* ── Tier 1 dossier — badges become names ── */
 .dossier .dz-calltag { margin: 8px 0 6px; font-size: 16px; }
 .dz-sub { font-size: 11px; letter-spacing: 2px; color: var(--phosphor-dim); text-transform: uppercase; margin: 12px 0 4px; }
