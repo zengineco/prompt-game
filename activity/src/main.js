@@ -243,11 +243,29 @@ var SELF_MYTH = {
   'robot|bullseye+bullseye':'Human CAPTCHA','robot|crylaugh+fire':'Slop Magnet','robot|handshake+handshake':'Synthetic Empath','robot|bullseye+chef':'Prompt Black Belt','robot|crylaugh+popcorn':'AI Apocalypse Tourist'
 };
 
+// THE COURTROOM — 13 dispute/voting-behavior ladders (DISPUTE_LADDERS.md), keyed by DB column.
+// Same 5/10/20/30/40/★50 thresholds as badges; single-stat ladders.
+var DISPUTE_LADDERS = {
+  disputes_raised:      { label: 'Disputes Raised',      e: '⚖️', t: ['Argumentative', 'Receipt Requester', 'Objection Poster', 'Comment Section Lawyer', 'Legally Ambitious', 'Due Process Dandy'] },
+  defenses_won:         { label: 'Defenses Won',         e: '🛡️', t: ['Against The Grain', 'Misunderstood', 'Wrongfully Accused', 'Beating The Allegations', 'Shark Out Of Water', 'Allegation-Proof'] },
+  defenses_lost:        { label: 'Defenses Lost',        e: '⛓️', t: ['Denial', 'Not Helping', 'Digging Deeper', 'Making It Worse', 'Exhibit A', 'Convicted By Vibes'] },
+  judgments_upheld:     { label: 'Judgments Upheld',     e: '🔨', t: ['Technically Correct', 'Called It', 'Good Read', 'Receipt Holder', 'Proven Nonfiction', 'Lore Accurate'] },
+  judgments_overturned: { label: 'Judgments Overturned', e: '🔄', t: ['Incorrect', 'Reaching', 'Bad Call', 'Community Noted', 'Instant Replay', 'Fact Checked Live'] },
+  mercy_votes:          { label: 'Mercy Votes',          e: '🕊️', t: ['Benefit Of The Doubt', 'Soft Spot', 'Defense Attorney', 'Public Defender', 'Free My Boy', 'Not Guilty By Vibes'] },
+  nomercy_votes:        { label: 'No-Mercy Votes',       e: '🍅', t: ['Tough Crowd', 'No Excuses', 'Throwing Tomatoes', 'Hang Em High', 'Maximum Sentence', 'Pack Watch Judge'] },
+  deciding_votes:       { label: 'Deciding Votes',       e: '👑', t: ['Swing Vote', 'Tie Breaker', 'Decider', 'Kingmaker', 'Final Say', 'Patch Notes'] },
+  rounds_voted:         { label: 'Participation',        e: '🗳️', t: ['Enrolled', 'Participator', 'Registered Voter', 'Civic Duty', 'Democracy Dilettante', 'Voice Of The People'] },
+  rounds_abstained:     { label: 'Abstention',           e: '😶', t: ['Lurking', 'Seen It', 'On The Fence', 'Window Shopper', 'Ghost Voter', 'Read Receipts Enabled'] },
+  vote_switches:        { label: 'Vote-Switching',       e: '🤝', t: ['Wavering', 'Folded', 'Walking It Back', 'Flip Flopper', 'Weathervane', 'Crowd-Sourced Opinion'] },
+  crowd_aligned:        { label: 'Crowd Alignment',      e: '🐑', t: ['Nodding Along', 'Same Here', 'Go With The Flow', 'Consensus Enjoyer', 'Sheepish', 'NPC Dialogue Option'] },
+  contrarian_votes:     { label: 'Contrarianism',        e: '🙅', t: ['Different Story', 'Pushback', "Devil's Advocate", 'Contrarian', 'Lone Dissenter', 'Opposite Day CEO'] }
+};
+
 // from raw stats -> the titles you hold + your worn calltag (highest)
-function computeIdentity(stats) {
+function computeIdentity(stats, dstats) {
   var recv = {}, give = {};
   (stats || []).forEach(function (s) { recv[s.badge] = s.recv; give[s.badge] = s.give; });
-  var recvTitles = [], giveTitles = [], comboTitles = [], crossTitles = [], totalPrestige = 0;
+  var recvTitles = [], giveTitles = [], comboTitles = [], crossTitles = [], disputeTitles = [], totalPrestige = 0;
 
   function singles(counts, ladders, axis, out) {
     Object.keys(counts).forEach(function (b) {
@@ -294,11 +312,19 @@ function computeIdentity(stats) {
   tripleCross(BOSS_FORMS, recv, give, 'boss');
   tripleCross(SELF_MYTH, give, recv, 'myth');
 
+  // THE COURTROOM: each dispute/voting behavior is its own single-stat ladder (tier 1, like a badge)
+  if (dstats) {
+    Object.keys(DISPUTE_LADDERS).forEach(function (col) {
+      var c = dstats[col] || 0, i = levelIdx(c);
+      if (i >= 0) disputeTitles.push({ col: col, label: DISPUTE_LADDERS[col].t[i], idx: i, count: c, axis: 'dispute', tier: 1, prestige: Math.floor(c / 50) });
+    });
+  }
+
   // calltag: highest tier (triplet > combo > single), then prestige, rung, strength
-  var all = recvTitles.concat(giveTitles).concat(comboTitles).concat(crossTitles).slice().sort(function (a, b) {
+  var all = recvTitles.concat(giveTitles).concat(comboTitles).concat(crossTitles).concat(disputeTitles).slice().sort(function (a, b) {
     return ((b.tier || 1) - (a.tier || 1)) || ((b.prestige || 0) - (a.prestige || 0)) || ((b.idx || 0) - (a.idx || 0)) || ((b.strength || b.count || 0) - (a.strength || a.count || 0));
   });
-  return { recvTitles: recvTitles, giveTitles: giveTitles, comboTitles: comboTitles, crossTitles: crossTitles, totalPrestige: totalPrestige, calltag: all.length ? all[0].label : null, calltagPrestige: all.length ? (all[0].prestige || 0) : 0 };
+  return { recvTitles: recvTitles, giveTitles: giveTitles, comboTitles: comboTitles, crossTitles: crossTitles, disputeTitles: disputeTitles, totalPrestige: totalPrestige, calltag: all.length ? all[0].label : null, calltagPrestige: all.length ? (all[0].prestige || 0) : 0 };
 }
 
 // gold ★ per completed prestige cycle (50 of a badge), capped for display
@@ -307,17 +333,19 @@ function stars(n) { n = n || 0; return n > 0 ? ' <span class="prestige-star">' +
 // the dossier panel — your earned ranks + the Projection + progress to next
 function dossierHtml() {
   var id = STATE.myIdentity;
-  if (!id || (!id.recvTitles.length && !id.giveTitles.length)) {
+  if (!id || (!id.recvTitles.length && !id.giveTitles.length && !(id.disputeTitles || []).length)) {
     return '<div class="panel dossier"><div class="label">🪪 YOUR DOSSIER</div>' +
       '<div class="muted">no rank yet — earn badges on your prompts, and hand them out, to unlock your name.</div></div>';
   }
   function row(t, axis) {
-    var ladder = axis === 'recv' ? RECEIVER_LADDERS : GIVER_LADDERS;
+    var glyph, rungs;
+    if (axis === 'dispute') { var dl = DISPUTE_LADDERS[t.col]; glyph = dl.e; rungs = dl.t; }
+    else { rungs = (axis === 'recv' ? RECEIVER_LADDERS : GIVER_LADDERS)[t.badge]; glyph = badgeEmoji(t.badge); }
     var nextThresh = t.idx < LEVELS.length - 1 ? LEVELS[t.idx + 1] : null;
     var prog = nextThresh
-      ? t.count + '/' + nextThresh + ' → ' + ladder[t.badge][t.idx + 1]
+      ? t.count + '/' + nextThresh + ' → ' + rungs[t.idx + 1]
       : t.count + '/' + ((t.prestige + 1) * 50) + ' → ★' + (t.prestige + 1);
-    return '<div class="dz-row"><span class="dz-badge">' + badgeEmoji(t.badge) + '</span>' +
+    return '<div class="dz-row"><span class="dz-badge">' + glyph + '</span>' +
       '<span class="dz-title">' + escapeHtml(t.label) + stars(t.prestige) + '</span>' +
       '<span class="dz-prog muted">' + escapeHtml(prog) + '</span></div>';
   }
@@ -328,7 +356,7 @@ function dossierHtml() {
   var html = '<div class="panel dossier"><div class="label">🪪 YOUR DOSSIER</div>';
   html += '<div class="dz-calltag">WORN: <b>' + escapeHtml(worn) + '</b>' + stars(id.calltagPrestige) + '</div>';
   var seen = {}, opts = '<option value="__auto__"' + (chosen === '__auto__' ? ' selected' : '') + '>★ Auto (highest)</option>';
-  (id.crossTitles || []).concat(id.comboTitles || []).concat(recv).concat(give).forEach(function (t) { if (seen[t.label]) return; seen[t.label] = 1; opts += '<option value="' + escapeHtml(t.label) + '"' + (chosen === t.label ? ' selected' : '') + '>' + escapeHtml(t.label) + '</option>'; });
+  (id.crossTitles || []).concat(id.comboTitles || []).concat(recv).concat(give).concat(id.disputeTitles || []).forEach(function (t) { if (seen[t.label]) return; seen[t.label] = 1; opts += '<option value="' + escapeHtml(t.label) + '"' + (chosen === t.label ? ' selected' : '') + '>' + escapeHtml(t.label) + '</option>'; });
   opts += '<option value="__none__"' + (chosen === '__none__' ? ' selected' : '') + '>— no label —</option>';
   html += '<div class="dz-pick">WEAR: <select id="calltag-sel">' + opts + '</select></div>';
   if (id.comboTitles && id.comboTitles.length) {
@@ -351,6 +379,8 @@ function dossierHtml() {
   }
   if (recv.length) html += '<div class="dz-sub">WHAT YOUR PROMPTS EARN</div>' + recv.map(function (t) { return row(t, 'recv'); }).join('');
   if (give.length) html += '<div class="dz-sub">THE PROJECTION — what you inflict</div>' + give.map(function (t) { return row(t, 'give'); }).join('');
+  var disp = (id.disputeTitles || []).slice().sort(bySort);
+  if (disp.length) html += '<div class="dz-sub">⚖️ THE COURTROOM — how you handle judgment</div>' + disp.map(function (t) { return row(t, 'dispute'); }).join('');
   return html + '</div>';
 }
 // wire the calltag picker (auto / a specific earned title / no label)
@@ -717,7 +747,9 @@ async function refresh() {
     // Tier 1 — my badge tallies become my identity; wear the highest as my calltag
     var bsr = await sb.from('prompt_badge_stats').select('badge,recv,give').eq('discord_id', STATE.user.id);
     STATE.badgeStats = bsr.data || [];
-    STATE.myIdentity = computeIdentity(STATE.badgeStats);
+    var dsr = await sb.from('prompt_dispute_stats').select('*').eq('discord_id', STATE.user.id).maybeSingle();
+    STATE.disputeStats = dsr.data || null;
+    STATE.myIdentity = computeIdentity(STATE.badgeStats, STATE.disputeStats);
     // auto-wear the highest ONLY until the player has made a choice (chosen_title set)
     var chosenT = STATE.myProfile && STATE.myProfile.chosen_title;
     if (!chosenT && STATE.myIdentity.calltag && (!STATE.myProfile || STATE.myProfile.calltag !== STATE.myIdentity.calltag)) {
