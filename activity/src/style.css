@@ -354,6 +354,37 @@ button.primary:hover { background: #5cff88; }
 .bchips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
 .bchip { font-size: 19px; }
 
+/* ── dispute / courtroom UI ─────────────────────────────────────── */
+button.bchip.dispute-badge {
+  font-size: 16px; cursor: pointer; background: rgba(255,207,77,0.10);
+  border: 1px solid rgba(255,207,77,0.5); color: var(--phosphor);
+  border-radius: 6px; padding: 2px 7px; line-height: 1.4; font-family: inherit;
+}
+button.bchip.dispute-badge:hover { background: rgba(255,207,77,0.22); }
+button.bchip.dispute-badge:disabled { opacity: 0.5; cursor: default; }
+.bchip.disputing { color: #ffcf4d; opacity: 0.9; }
+.dispute-hint { font-size: 11px; margin-top: 5px; }
+.dispute-panel { border-color: #ffcf4d; box-shadow: inset 0 0 14px rgba(255,207,77,0.12); }
+.dispute-panel .label { color: #ffcf4d; text-shadow: 0 0 6px rgba(255,207,77,0.4); }
+.dispute-row { padding: 6px 2px; border-bottom: 1px dashed rgba(157,255,190,0.18); font-size: 14px; }
+.dispute-row:last-child { border-bottom: none; }
+.dvote { display: inline-flex; gap: 6px; margin: 0 4px; }
+.dvote-btn {
+  cursor: pointer; font-family: inherit; font-size: 12px; letter-spacing: 1px;
+  padding: 3px 9px; border-radius: 5px; background: transparent; color: var(--phosphor);
+  border: 1px solid var(--phosphor);
+}
+.dvote-btn.over { border-color: #ff6b6b; color: #ff8a8a; }
+.dvote-btn.over:hover { background: rgba(255,107,107,0.18); }
+.dvote-btn.up:hover { background: rgba(157,255,190,0.16); }
+.dvote-btn:disabled { opacity: 0.45; cursor: default; }
+.dispute-row b.dover { color: #ff8a8a; }
+.dispute-row b.dup { color: var(--phosphor); }
+.flash-err {
+  background: rgba(255,107,107,0.16); border: 1px solid #ff6b6b; color: #ffb3b3;
+  padding: 7px 10px; border-radius: 6px; margin-bottom: 8px; font-size: 13px;
+}
+
 /* ── Tier 1 dossier — badges become names ── */
 .dossier .dz-calltag { margin: 8px 0 6px; font-size: 16px; }
 .dz-sub { font-size: 11px; letter-spacing: 2px; color: var(--phosphor-dim); text-transform: uppercase; margin: 12px 0 4px; }

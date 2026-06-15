@@ -1110,20 +1110,39 @@ function renderResolving() {
       }).join('') + '</div>' +
       '<div class="muted">…revealing who…</div>';
   } else {
-    // STAGE 2: authors + the badges each prompt collected
+    // STAGE 2: authors + the badges each prompt collected, + the dispute layer
+    var humans = STATE.players.filter(function (p) { return p.id !== BOT_ID; }).length;
+    var canDispute = STATE.session.phase === 'resolving' && humans >= 2;
+    function disputeFor(subId, badge) { return STATE.disputes.filter(function (d) { return d.submission_id === subId && d.badge === badge; })[0]; }
     var rowsHtml = sorted.map(function (s, i) {
       var isBot = s.discord_id === BOT_ID;
+      var mine = String(s.discord_id) === String(STATE.user.id);
       var c = countOf(s);
       var win = (c === top && top > 0) ? ' win' : '';
-      var chips = badgesOf(s).map(function (v) { return '<span class="bchip">' + badgeEmoji(v.badge) + '</span>'; }).join('');
-      var who = '<span class="reveal-let">' + LET[i] + '</span> ' + escapeHtml(s.username) + (isBot ? ' <span class="bot-tag">🤖 BOT</span>' : '');
+      var chips;
+      if (mine && canDispute) {
+        // group my prompt's badges by type; each distinct type is contestable
+        var distinct = {};
+        badgesOf(s).forEach(function (v) { distinct[v.badge] = (distinct[v.badge] || 0) + 1; });
+        chips = Object.keys(distinct).map(function (b) {
+          var lbl = badgeEmoji(b) + (distinct[b] > 1 ? ' ×' + distinct[b] : '');
+          var d = disputeFor(s.id, b);
+          if (d && d.status === 'open') return '<span class="bchip disputing">' + lbl + ' ⚖️…</span>';
+          if (d) return '<span class="bchip">' + lbl + '</span>';
+          return '<button class="bchip dispute-badge" data-sub="' + s.id + '" data-badge="' + b + '" title="dispute this badge">' + lbl + ' ⚖️</button>';
+        }).join('');
+      } else {
+        chips = badgesOf(s).map(function (v) { return '<span class="bchip">' + badgeEmoji(v.badge) + '</span>'; }).join('');
+      }
+      var who = '<span class="reveal-let">' + LET[i] + '</span> ' + escapeHtml(s.username) + (isBot ? ' <span class="bot-tag">🤖 BOT</span>' : '') + (mine ? ' <span class="muted">· you</span>' : '');
       return '<div class="result-row' + win + (isBot ? ' botrow' : '') + '"><span class="who">' + who + '</span> ' +
         (win ? '🏆 ' : '') + '<span class="muted">(' + c + ')</span>' +
         '<div class="sub-text">&gt; ' + escapeHtml(s.text) + '</div>' +
-        (chips ? '<div class="bchips">' + chips + '</div>' : '<div class="muted">— no badges —</div>') + '</div>';
+        (chips ? '<div class="bchips">' + chips + '</div>' : '<div class="muted">— no badges —</div>') +
+        (mine && canDispute ? '<div class="dispute-hint muted">⚖️ tap a badge to dispute it — the table decides</div>' : '') + '</div>';
     }).join('');
     var roast = botWon ? '<div class="panel roast"><div class="label">🤖 PROMPT_AI TOPPED THE BOARD</div><div class="sub-text">the machine pulled the most badges this round. humbling.</div></div>' : '';
-    bodyHtml = roast + '<div class="results">' + rowsHtml + '</div>';
+    bodyHtml = roast + '<div class="results">' + rowsHtml + '</div>' + disputePanelHtml(subs);
   }
 
   el('game').innerHTML =
@@ -1131,7 +1150,59 @@ function renderResolving() {
     (stage >= 1 ? '<div class="row-actions"><button id="next-btn">NEXT ROUND ▸</button></div>' : '');
 
   var nb = el('next-btn'); if (nb) nb.addEventListener('click', function () { callFn('next', {}); });
+  wireDisputes();
   // (auto-advance is handled globally by scheduleAutoAdvance() in render())
+}
+
+// the dispute argument board — open disputes the table can judge, + outcomes
+function disputePanelHtml(subs) {
+  if (!STATE.disputes.length) return '';
+  function subName(id) { var s = subs.filter(function (x) { return x.id === id; })[0]; return s ? s.username : 'someone'; }
+  function myVote(dId) { return STATE.disputeVotes.filter(function (v) { return v.dispute_id === dId && String(v.voter) === String(STATE.user.id); })[0]; }
+  var rows = STATE.disputes.slice().sort(function (a, b) { return (a.status === 'open' ? 0 : 1) - (b.status === 'open' ? 0 : 1); }).map(function (d) {
+    var votes = STATE.disputeVotes.filter(function (v) { return v.dispute_id === d.id; });
+    var up = votes.filter(function (v) { return v.uphold; }).length, over = votes.length - up;
+    var line = '<b>' + escapeHtml(subName(d.submission_id)) + '</b> disputes ' + badgeEmoji(d.badge) + ' on their prompt';
+    if (d.status === 'open') {
+      var iAmDisputer = String(d.disputer) === String(STATE.user.id);
+      var mv = myVote(d.id);
+      if (iAmDisputer) line += ' <span class="muted">— awaiting the table…</span>';
+      else if (mv) line += ' <span class="muted">— you said ' + (mv.uphold ? 'UPHOLD' : 'OVERTURN') + '</span>';
+      else line += ' <span class="dvote"><button class="dvote-btn over" data-d="' + d.id + '" data-up="0">OVERTURN</button><button class="dvote-btn up" data-d="' + d.id + '" data-up="1">UPHOLD</button></span>';
+      line += ' <span class="muted">(' + over + '↓ / ' + up + '↑)</span>';
+    } else {
+      line += ' — <b class="' + (d.status === 'overturned' ? 'dover' : 'dup') + '">' + (d.status === 'overturned' ? 'STRUCK ✓' : 'UPHELD') + '</b>';
+    }
+    return '<div class="dispute-row">' + line + '</div>';
+  }).join('');
+  return '<div class="panel dispute-panel"><div class="label">⚖️ THE DOCKET</div>' + rows + '</div>';
+}
+
+// brief transient error banner (dispute rejections etc.)
+function flashErr(e) {
+  var msg = (e && e.message ? e.message : String(e)).replace(/^fn\[[^\]]+\]:\s*/, '');
+  var g = el('game'); if (!g) return;
+  var b = document.createElement('div'); b.className = 'flash-err'; b.textContent = '⚠ ' + msg;
+  g.insertBefore(b, g.firstChild);
+  setTimeout(function () { if (b.parentNode) b.parentNode.removeChild(b); }, 2800);
+}
+
+// wire dispute (raise) + dispute-vote (judge) buttons in the results view
+function wireDisputes() {
+  Array.prototype.forEach.call(document.querySelectorAll('.dispute-badge'), function (btn) {
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      callFn('badgedispute', { disputer: STATE.user.id, submission_id: btn.getAttribute('data-sub'), badge: btn.getAttribute('data-badge') })
+        .then(function () { refresh(); }, function (e) { btn.disabled = false; flashErr(e); });
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('.dvote-btn'), function (btn) {
+    btn.addEventListener('click', function () {
+      Array.prototype.forEach.call(document.querySelectorAll('.dvote-btn'), function (b) { b.disabled = true; });
+      callFn('badgedisputevote', { voter: STATE.user.id, dispute_id: btn.getAttribute('data-d'), uphold: btn.getAttribute('data-up') === '1' })
+        .then(function () { refresh(); }, function (e) { Array.prototype.forEach.call(document.querySelectorAll('.dvote-btn'), function (b) { b.disabled = false; }); flashErr(e); });
+    });
+  });
 }
 
 // ── AFK auto-advance — keep a table moving even if someone goes silent ───────
