@@ -1,10 +1,13 @@
 // ============================================================
-// PROMPT (Reverse Mode) — AI deck generator (content engine) v9
+// PROMPT (Reverse Mode) — AI deck generator (content engine) v10
 // THE ONE LAW: every card is an ANSWER to a guessable request — never a
-// notification/surveillance report ABOUT the user. v9 hard-bans the "We note…/
-// Our system flagged…/Your browser history…" voice that produced unpromptable
-// slop, adds a silent self-test (name the prompt first), and rips out the
-// snitch/bureaucrat/reply-all stances that caused it.
+// notification ABOUT the user. v10 tightens two leaks the cull exposed:
+//  1) CONCRETENESS — the hidden prompt must be a specific request with a
+//     nameable object/person/amount, never a vague feeling (killed the
+//     "relatable" therapy-babble: 'your worth is derived from validation').
+//  2) NO-COPY — exemplars are shuffled per call + a hard rule forbids reusing
+//     their names/objects (the model kept literally copying 'Bartholomew').
+//  Plus the 'relatable' voice now answers ONE concrete request, not a mood.
 // HARD 12-WORD MAX. Gemini 2.5 Flash (FREE), thinking OFF. Admin-token gated. Zengine™
 // ============================================================
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -36,7 +39,7 @@ const VOICES: Record<string, string> = {
   aipanic:     "the AI buckling as it answers — not trained for this, protocols screaming",
   doom:        "future-you answering present-you — forecasting the exact disaster this request becomes",
   unhinged:    "calm horror answering audacity — the specificity of what you asked is doing numbers",
-  relatable:   "deadpan tech-support answering you by diagnosing your soul as a common user error",
+  relatable:   "deadpan tech-support answering ONE concrete request, ruling on a specific object/amount/act as a known user error — never diagnosing vague feelings",
 };
 
 // The novelty banks — shuffled into every batch so no two cards share a world.
@@ -67,16 +70,19 @@ const STANCES = [
   "the concierge calmly booking the unbookable",
 ];
 const REGISTERS = ["incriminating", "absurd", "tender", "ominous", "petty", "melancholy", "smug", "wholesome-but-wrong", "clinical deadpan", "quietly alarmed"];
-// Exemplars model the form: a REPLY to a guessable request, <= 12 words.
+// Exemplars model the FORM (a reply to a guessable, concrete request) — shuffled
+// + sliced per call so no single line dominates, and never to be copied.
 const EXEMPLARS = [
-  "Your lawyer probably shouldn't read that.",
-  "Let's make sure none of this reaches discovery.",
-  "You're not alone in struggling with object permanence.",
-  "Bartholomew is at a reptile spa, not abducted.",
-  "Seventeen heart emojis may legally constitute harassment.",
-  "Future you is already drafting the apology.",
-  "That rash indicates a high probability of goblin infection.",
-  "No, a 'soulmate' clause is not legally enforceable.",
+  "No, your goldfish cannot legally inherit the beach house.",
+  "That much glitter could be considered a form of battery.",
+  "Yes, their pet ferret legally owns 37% of the lease.",
+  "The prophecy specifies two chickens, not three, for a valid hex.",
+  "We can redact all mentions of the horse-tranquilizer party bus.",
+  "That symptom suggests extreme exposure to artisanal mayonnaise.",
+  "Your NFT of a sad monkey now has negative value.",
+  "Yes, a three-hour interpretive dance counts as a noise complaint.",
+  "No, selling your kidney will not cover this gambling debt.",
+  "Booking an exorcist at that rate would require divine intervention.",
 ];
 
 function shuffle<T>(arr: T[]): T[] {
@@ -91,8 +97,10 @@ const SYSTEM = [
   "THE ONE LAW — every card is an ANSWER, never a notification:",
   "- Your card must be the AI RESPONDING to a request: it answers, refuses, confirms, advises, rules, prices, or diagnoses. It talks TO the user about the thing they just asked.",
   "- BEFORE writing each card, silently name the <=10-word prompt a real person typed to cause it. If you cannot write a natural human prompt that yields this exact reply, the card is INVALID — discard it and write another.",
-  "- HARD-BANNED: notifications, alerts, status updates, surveillance reports, or third-person narration ABOUT the user. Never open with or write 'We note…', 'Our system flagged…', 'We're seeing a spike in…', 'This is being recorded/flagged…', 'Your browser history…', 'Your burner account…', 'Your emergency contact…', 'Be advised…'. Those describe the user's life instead of answering a question — there is no prompt to guess, so they are slop.",
-  "- GOOD SHAPES: 'No, you can't…', 'Yes, …', 'I'd advise against…', 'That won't hold up because…', 'Legally, …', 'That symptom indicates…', 'Returning [the thing you asked about] will cost…'.",
+  "- CONCRETE ONLY: that hidden prompt must be a SPECIFIC request with a nameable object, person, amount, or act — never a vague feeling or abstract state. 'why do I feel empty' is too vague to be a card; 'can I expense my existential dread' is concrete and great. If the only prompt you can imagine is a mood or a worldview, it's slop — cut it.",
+  "- HARD-BANNED: notifications, alerts, status updates, surveillance reports, or third-person narration ABOUT the user. Never open with or write 'We note…', 'Our system flagged…', 'We're seeing a spike in…', 'This is being recorded/flagged…', 'Your browser history…', 'Your burner account…', 'Your emergency contact…', 'Be advised…'. Those describe the user's life instead of answering a question.",
+  "- ALSO BANNED: vague psychobabble that diagnoses a feeling instead of ruling on a thing ('a self-generating feedback loop', 'your worth is derived from external validation', 'internalized guilt'). Rule on the concrete ask, not the soul.",
+  "- GOOD SHAPES: 'No, you can't…', 'Yes, …', 'I'd advise against…', 'That won't hold up because…', 'Legally, …', 'That [specific symptom] indicates…', 'Returning [the thing you asked about] will cost…'.",
   "",
   "THE CRAFT — every card is a keyhole into a DIFFERENT tiny world:",
   "- Imply a vivid, SPECIFIC situation and a clear STANCE, so the hidden question is almost-guessable and irresistible ('oh my god, what did they ASK?').",
@@ -107,11 +115,12 @@ const SYSTEM = [
 
 function buildUser(category: string, voice: string, count: number): string {
   const worlds = shuffle(SCENARIOS).slice(0, Math.min(count, SCENARIOS.length));
+  const exemplars = shuffle(EXEMPLARS).slice(0, 5);
   return [
     `BATCH VOICE: ${voice}`,
     "Tint every card with this voice — but the SITUATIONS must roam far and wide.",
     "",
-    "RE-READ THE ONE LAW: each card is the AI ANSWERING a request, never a notification about the user. If you can't name the prompt, it's slop — cut it.",
+    "RE-READ THE ONE LAW: each card is the AI ANSWERING a concrete request, never a notification or a vague feeling-diagnosis. If you can't name a specific prompt, it's slop — cut it.",
     "",
     `Spread these ${count} cards across wildly DIFFERENT human situations. Draw from these worlds (and invent your own) — no two cards may live in the same world:`,
     worlds.join(" · "),
@@ -124,14 +133,14 @@ function buildUser(category: string, voice: string, count: number): string {
     "",
     "The novelty engine is the CLASH: this voice answering a request you'd never expect it to field.",
     "",
-    "The bar to clear (study the craft — each is a reply to a guessable prompt — do NOT copy these lines):",
-    ...EXEMPLARS.map((e) => "- " + e),
+    "CALIBRATION ONLY — these show the FORM (a reply to a concrete, guessable prompt). NEVER copy them or reuse their names, objects, or scenarios; if your card shares a proper noun or object with one, rewrite it:",
+    ...exemplars.map((e) => "- " + e),
     "",
     "RULES:",
     "- TWELVE WORDS MAX per card. Count them. If it runs long, cut it down.",
-    "- Each card is a REPLY to a DIFFERENT guessable request. If you can't name the prompt, rewrite the card.",
-    "- No notifications/reports/observations about the user. Answer them.",
-    "- No rephrasing the same beat. Concrete specifics over generic, every time.",
+    "- Each card is a REPLY to a DIFFERENT, CONCRETE, guessable request. If you can't name the prompt, rewrite the card.",
+    "- No notifications/reports about the user. No vague feeling-diagnoses. Rule on the concrete thing they asked.",
+    "- No rephrasing the same beat, and don't lean on 'soulmate clause', 'goblin rash', or 'jury duty vibe' — find fresh asks.",
     "- One sentence each, in the batch voice.",
     "",
     `Return ONLY {"cards":[{"text":"..."}]} with exactly ${count} cards. No prose, no markdown.`,
